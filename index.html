@@ -57,26 +57,30 @@
   #radial-wrap.hidden { display:none }
   #radial-svg { width:100%; height:100%; display:block }
 
-  /* ── DEFENSE PANEL ── */
+  /* ── DEFENSE PANEL (header dropdown) ── */
+  #def-panel-wrapper {
+    margin-left:auto; position:relative; display:none;
+  }
+  #def-panel-btn {
+    background:#1a1e38; border:1px solid var(--bdr); border-radius:8px;
+    color:var(--text); padding:5px 12px; cursor:pointer;
+    font-size:.75rem; font-weight:700; font-family:inherit;
+    display:flex; align-items:center; gap:6px; white-space:nowrap;
+    transition:border-color .18s,background .18s;
+  }
+  #def-panel-btn:hover { background:#1e2240; border-color:#5c6bc0; }
+  #def-toggle { font-size:.6rem; color:var(--dim); transition:transform .25s; display:inline-block; }
+  #def-panel-wrapper.open #def-toggle { transform:rotate(180deg); }
   #def-panel {
-    position:absolute; top:14px; right:14px;
-    background:rgba(11,13,26,.92); border:1px solid var(--bdr);
-    border-radius:12px; min-width:170px; max-width:215px;
-    backdrop-filter:blur(10px); z-index:20;
-    overflow:hidden; box-shadow:0 6px 24px rgba(0,0,0,.45);
+    position:absolute; top:calc(100% + 6px); right:0;
+    background:rgba(11,13,26,.97); border:1px solid var(--bdr);
+    border-radius:12px; min-width:200px; max-width:260px;
+    backdrop-filter:blur(10px); z-index:200;
+    overflow:hidden; box-shadow:0 8px 28px rgba(0,0,0,.55);
     display:none;
   }
-  #def-panel-hdr {
-    display:flex; align-items:center; justify-content:space-between;
-    padding:9px 14px; cursor:pointer; user-select:none;
-    border-bottom:1px solid var(--bdr);
-  }
-  #def-panel-hdr:hover { background:rgba(30,34,64,.5) }
-  .def-hdr-title { font-size:.6rem; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; color:var(--dim) }
-  #def-toggle { font-size:.65rem; color:var(--dim); transition:transform .2s }
-  #def-panel.collapsed #def-toggle { transform:rotate(180deg) }
+  #def-panel-wrapper.open #def-panel { display:block; }
   #def-body { padding:11px 14px; display:flex; flex-direction:column; gap:10px }
-  #def-panel.collapsed #def-body { display:none }
   .def-section { display:flex; flex-direction:column; gap:5px }
   .def-section-lbl { font-size:.55rem; font-weight:800; letter-spacing:1.3px; text-transform:uppercase; opacity:.8 }
   .def-chips { display:flex; flex-wrap:wrap; gap:3px }
@@ -237,20 +241,24 @@
   ═══════════════════════════════════════════════════ */
 
   @media(max-width:860px) {
-    /* Details panel docks to bottom so it doesn't overlap the diagram */
-    #def-panel { top:auto !important; bottom:58px; right:8px; left:8px; max-width:none; min-width:0; }
     .slot-ac-item { padding:12px 13px; font-size:.84rem; }
+  }
+
+  @media(max-width:600px) {
+    /* Details dropdown: wider on phone, still anchored right */
+    #def-panel { min-width:min(260px, calc(100vw - 24px)); right:0; }
+    #def-panel-btn { font-size:.7rem; padding:5px 10px; }
   }
 
   @media(max-width:600px) {
 
     /* ── Header: single compact row ── */
-    header { flex-wrap:nowrap; padding:7px 10px; gap:8px; overflow:hidden; }
+    header { flex-wrap:nowrap; padding:7px 10px; gap:8px; overflow:visible; }
     .logo  { font-size:1.05rem; white-space:nowrap; flex-shrink:0; }
     .srch  { flex-shrink:1; min-width:0; gap:5px; }
     .srch input  { width:110px; font-size:.78rem; padding:5px 9px; }
     .srch button { padding:5px 10px; font-size:.74rem; }
-    #ac-list { width:calc(100vw - 28px); }
+    #ac-list { width:min(220px, calc(100vw - 24px)); }
     #poke-result { display:none; } /* hidden while searching — result shows on type grid instead */
 
     /* ── Tabs ── */
@@ -333,6 +341,14 @@
     <div id="ac-list"></div>
   </div>
   <div id="poke-result"></div>
+  <div id="def-panel-wrapper">
+    <button id="def-panel-btn" onclick="toggleDefPanel()">
+      Details <span id="def-toggle">▲</span>
+    </button>
+    <div id="def-panel">
+      <div id="def-body"></div>
+    </div>
+  </div>
 </header>
 
 <div class="tab-bar">
@@ -364,13 +380,6 @@
   </div>
   <div id="radial-wrap" class="hidden">
     <svg id="radial-svg" xmlns="http://www.w3.org/2000/svg"></svg>
-    <div id="def-panel">
-      <div id="def-panel-hdr" onclick="toggleDefPanel()">
-        <span class="def-hdr-title">Details</span>
-        <span id="def-toggle">▲</span>
-      </div>
-      <div id="def-body"></div>
-    </div>
   </div>
 </div>
 
@@ -764,7 +773,6 @@ function renderMatchup() {
 //  DEFENSE PANEL
 // ═══════════════════════════════════════════════
 function renderDefPanel() {
-  const panel = document.getElementById('def-panel');
   const body  = document.getElementById('def-body');
   const isDual = selected.length === 2;
 
@@ -822,11 +830,13 @@ function renderDefPanel() {
     sections.push(`<div class="def-none">No notable matchups</div>`);
 
   body.innerHTML = sections.join('');
-  panel.style.display = 'block';
+  const wrapper = document.getElementById('def-panel-wrapper');
+  wrapper.style.display = 'block';
+  wrapper.classList.add('open');  // auto-open when new type selected
 }
 
 function toggleDefPanel() {
-  document.getElementById('def-panel').classList.toggle('collapsed');
+  document.getElementById('def-panel-wrapper').classList.toggle('open');
 }
 
 // ═══════════════════════════════════════════════
@@ -836,7 +846,9 @@ function showGrid() {
   document.getElementById('grid-view').classList.remove('hidden');
   document.getElementById('radial-wrap').classList.add('hidden');
   document.getElementById('tray').classList.add('hidden');
-  document.getElementById('def-panel').style.display = 'none';
+  const wrapper = document.getElementById('def-panel-wrapper');
+  wrapper.style.display = 'none';
+  wrapper.classList.remove('open');
 }
 function showRadial() {
   document.getElementById('grid-view').classList.add('hidden');
@@ -941,6 +953,10 @@ pokeInput.addEventListener('keydown', function(e) {
   else if (e.key === 'Escape') hideAC();
 });
 document.addEventListener('click', e => { if (!e.target.closest('.srch')) hideAC(); });
+document.addEventListener('click', e => {
+  if (!e.target.closest('#def-panel-wrapper'))
+    document.getElementById('def-panel-wrapper')?.classList.remove('open');
+});
 
 // ═══════════════════════════════════════════════
 //  POKÉAPI
