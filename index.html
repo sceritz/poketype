@@ -231,6 +231,92 @@
   @media(max-width:1150px) { #team-body { grid-template-columns:1fr 300px } }
   @media(max-width:920px)  { #team-body { grid-template-columns:1fr } #team-sidebar { border-left:none; border-top:1px solid var(--bdr); max-height:260px; flex-direction:row } #hole-panel,#rec-panel { flex:1; max-height:none } #hole-panel { border-bottom:none; border-right:1px solid var(--bdr) } #team-slots { grid-template-columns:repeat(3,1fr) } }
   @media(max-width:580px)  { #team-slots { grid-template-columns:repeat(2,1fr) } }
+
+  /* ═══════════════════════════════════════════════════
+     MOBILE — phones & small tablets
+  ═══════════════════════════════════════════════════ */
+
+  /* Dock Details panel to bottom on anything narrower than a tablet */
+  @media(max-width:860px) {
+    #def-panel { top:auto !important; bottom:72px; right:8px; left:8px; max-width:none; min-width:0; }
+    .slot-ac-item { padding:12px 13px; font-size:.84rem; }
+  }
+
+  /* ─── Small phones ≤ 600px ─── */
+  @media(max-width:600px) {
+
+    /* Header: stack logo / search / result vertically */
+    header { flex-wrap:wrap; gap:8px; padding:9px 14px; align-items:stretch; }
+    .logo  { flex:0 0 auto; }
+    .srch  { order:2; flex:1 1 100%; display:flex; gap:6px; }
+    .srch input  { flex:1; min-width:0; width:auto !important; font-size:.85rem; }
+    .srch button { flex-shrink:0; }
+    #ac-list     { width:100%; }
+    #poke-result { order:3; flex:1 1 100%; font-size:.76rem; }
+
+    /* Tab bar */
+    .tab-btn { padding:10px 14px; font-size:.7rem; letter-spacing:.6px; }
+
+    /* Tray: bigger touch targets */
+    #tray        { padding:8px 12px 10px; }
+    #tray-chips  { gap:6px; }
+    .tray-chip   { padding:7px 12px 7px 7px; font-size:.71rem; }
+    .tray-chip img { width:20px; height:20px; }
+    .tray-top    { font-size:.6rem; margin-bottom:6px; }
+    .clear-link  { font-size:.6rem; }
+
+    /* Type grid: keep 3-col but slightly more compact */
+    #type-grid            { gap:7px; }
+    .type-tile            { padding:10px 4px; border-radius:11px; }
+    .type-tile img        { width:36px; height:36px; }
+    .type-tile .tile-name { font-size:.59rem; letter-spacing:.5px; }
+
+    /* ── Team Builder ── */
+
+    /* Slot strip: 2 columns */
+    #team-slots  { grid-template-columns:repeat(2,1fr); gap:7px; padding:9px 12px; }
+    .team-slot   { min-height:70px; padding:8px 10px; }
+    .slot-spr    { width:32px; height:32px; }
+    .slot-name   { font-size:.75rem; }
+    .slot-chip   { font-size:.55rem; padding:2px 6px; }
+    .slot-input  { font-size:.78rem; padding:7px 10px; }
+    .slot-hint   { font-size:.6rem; }
+
+    /* Team body: single column, let #team-view scroll the whole page */
+    #team-view   { overflow-y:auto; }
+    #team-body   { grid-template-columns:1fr; height:auto; overflow:visible; }
+
+    /* Coverage table: horizontal scroll so it doesn't collapse */
+    #coverage-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; overflow-y:visible; height:auto; }
+    .coverage-table { min-width:420px; }
+    .cov-legend { font-size:.62rem; gap:6px; padding:8px 12px; }
+    .cov-type-cell { padding:7px 12px; }
+    .coverage-table thead th { font-size:.6rem; padding:8px 3px; }
+
+    /* Sidebar: stack vertically with natural heights */
+    #team-sidebar     { flex-direction:column !important; max-height:none !important; overflow:visible; border-left:none; border-top:1px solid var(--bdr); }
+    #hole-panel       { max-height:none; border-right:none !important; border-bottom:1px solid var(--bdr); }
+    #hole-panel-scroll{ overflow-y:visible; max-height:none; }
+    #rec-panel        { max-height:none; }
+    #rec-panel-scroll { overflow-y:visible; max-height:none; }
+
+    /* Rec cards: compact for narrow screens */
+    .rec-card        { gap:8px; padding:9px 12px; }
+    .rec-spr         { width:40px; height:40px; }
+    .rec-name        { font-size:.81rem; }
+    .rec-tier-badge  { font-size:.54rem; }
+    .rec-covers      { font-size:.64rem; }
+    .rec-synergy     { font-size:.6rem; }
+    .rec-add-btn     { padding:6px 9px; font-size:.62rem; }
+    .rec-controls-lbl{ font-size:.59rem; }
+    .reg-btn         { font-size:.57rem; padding:3px 8px; }
+
+    /* Hole cards */
+    .hole-type-name  { font-size:.78rem; }
+    .hole-mon-name   { font-size:.72rem; }
+    .panel-hdr       { padding:10px 13px; font-size:.6rem; }
+    .panel-empty     { font-size:.75rem; }
+  }
 </style>
 </head>
 <body>
