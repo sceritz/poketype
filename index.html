@@ -1,0 +1,1680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PokéType — Type Matchup Visualizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0b0d1a; --sur:#12152a; --bdr:#1e2240; --text:#e8eaf6; --dim:#5c6898; }
+  *,*::before,*::after { box-sizing:border-box; margin:0; padding:0 }
+  html,body { height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:'Inter','Segoe UI',system-ui,sans-serif }
+  body { display:flex; flex-direction:column }
+
+  /* ── HEADER ── */
+  header { flex-shrink:0; background:var(--sur); border-bottom:1px solid var(--bdr); padding:9px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; z-index:30 }
+  .logo { font-size:1.35rem; font-weight:900; letter-spacing:-.5px; background:linear-gradient(135deg,#ff6b6b,#ffd93d 40%,#6bcf7f 70%,#74b9ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text }
+
+  /* Search + autocomplete */
+  .srch { position:relative; display:flex; align-items:center; gap:6px }
+  .srch input { background:#1a1e38; border:1px solid var(--bdr); border-radius:8px; padding:6px 12px; color:var(--text); font-size:.82rem; outline:none; width:190px; transition:border-color .2s }
+  .srch input:focus { border-color:#5c6bc0 }
+  .srch input::placeholder { color:var(--dim) }
+  .srch button { background:#4a56b0; border:none; border-radius:8px; color:#fff; padding:6px 14px; cursor:pointer; font-size:.81rem; font-weight:600; transition:background .18s }
+  .srch button:hover { background:#6673cc }
+  #ac-list { position:absolute; top:calc(100% + 4px); left:0; width:190px; background:var(--sur); border:1px solid var(--bdr); border-radius:8px; max-height:220px; overflow-y:auto; z-index:200; display:none; box-shadow:0 8px 24px rgba(0,0,0,.5) }
+  #ac-list.open { display:block }
+  .ac-item { padding:7px 12px; font-size:.81rem; cursor:pointer; text-transform:capitalize; color:var(--text); border-bottom:1px solid rgba(30,34,64,.5) }
+  .ac-item:last-child { border-bottom:none }
+  .ac-item:hover, .ac-item.active { background:#1e2240; color:#fff }
+
+  #poke-result { display:flex; align-items:center; gap:6px; font-size:.82rem; flex-wrap:wrap }
+  #poke-result img.spr { width:36px; height:36px; image-rendering:pixelated }
+  .pkn { font-weight:700 }
+  .mini-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 8px 2px 4px; border-radius:10px; font-size:.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:#fff }
+  .mini-chip img { width:15px; height:15px; border-radius:50% }
+  .srch-err { color:#ff5252; font-size:.79rem }
+  .spin { display:inline-block; width:13px; height:13px; border:2px solid rgba(255,255,255,.1); border-top-color:#5c6bc0; border-radius:50%; animation:spin .55s linear infinite }
+  @keyframes spin { to { transform:rotate(360deg) } }
+
+  /* ── MAIN ── */
+  #app-main { flex:1; overflow:hidden; display:flex; flex-direction:column; min-height:0 }
+
+  /* ── GRID VIEW ── */
+  #grid-view { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:20px }
+  #grid-view.hidden { display:none }
+  .grid-hint { font-size:.78rem; color:var(--dim); text-transform:uppercase; letter-spacing:.8px; font-weight:600 }
+  #type-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; width:100%; max-width:780px }
+  .type-tile { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; padding:14px 6px; border-radius:14px; cursor:pointer; user-select:none; transition:transform .16s,filter .16s,box-shadow .16s; border:2px solid transparent }
+  .type-tile:hover { transform:translateY(-3px) scale(1.05); filter:brightness(1.15); box-shadow:0 8px 28px rgba(0,0,0,.55) }
+  .type-tile img { width:46px; height:46px; border-radius:50% }
+  .type-tile .tile-name { font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.8px; color:rgba(255,255,255,.92); text-shadow:0 1px 4px rgba(0,0,0,.6) }
+
+  /* ── RADIAL WRAP ── */
+  #radial-wrap { flex:1; position:relative; overflow:hidden; min-height:0 }
+  #radial-wrap.hidden { display:none }
+  #radial-svg { width:100%; height:100%; display:block }
+
+  /* ── DEFENSE PANEL ── */
+  #def-panel {
+    position:absolute; top:14px; right:14px;
+    background:rgba(11,13,26,.92); border:1px solid var(--bdr);
+    border-radius:12px; min-width:170px; max-width:215px;
+    backdrop-filter:blur(10px); z-index:20;
+    overflow:hidden; box-shadow:0 6px 24px rgba(0,0,0,.45);
+    display:none;
+  }
+  #def-panel-hdr {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:9px 14px; cursor:pointer; user-select:none;
+    border-bottom:1px solid var(--bdr);
+  }
+  #def-panel-hdr:hover { background:rgba(30,34,64,.5) }
+  .def-hdr-title { font-size:.6rem; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; color:var(--dim) }
+  #def-toggle { font-size:.65rem; color:var(--dim); transition:transform .2s }
+  #def-panel.collapsed #def-toggle { transform:rotate(180deg) }
+  #def-body { padding:11px 14px; display:flex; flex-direction:column; gap:10px }
+  #def-panel.collapsed #def-body { display:none }
+  .def-section { display:flex; flex-direction:column; gap:5px }
+  .def-section-lbl { font-size:.55rem; font-weight:800; letter-spacing:1.3px; text-transform:uppercase; opacity:.8 }
+  .def-chips { display:flex; flex-wrap:wrap; gap:3px }
+  .def-chip { font-size:.58rem; font-weight:800; text-transform:uppercase; letter-spacing:.4px; padding:2px 7px; border-radius:20px; color:rgba(255,255,255,.95); display:inline-block }
+  .def-none { font-size:.62rem; color:var(--dim); font-style:italic }
+
+  /* ── TRAY ── */
+  #tray { flex-shrink:0; background:var(--sur); border-top:1px solid var(--bdr); padding:8px 16px 9px }
+  #tray.hidden { display:none }
+  .tray-top { display:flex; align-items:center; gap:10px; font-size:.64rem; color:var(--dim); font-weight:700; letter-spacing:.7px; text-transform:uppercase; margin-bottom:7px }
+  .clear-link { background:none; border:1px solid var(--bdr); color:var(--dim); border-radius:5px; padding:2px 8px; cursor:pointer; font-size:.64rem; font-weight:700; transition:all .18s }
+  .clear-link:hover { border-color:#ff5252; color:#ff5252 }
+  #tray-chips { display:flex; flex-wrap:wrap; gap:5px }
+  .tray-chip { display:inline-flex; align-items:center; gap:5px; padding:4px 10px 4px 4px; border-radius:14px; font-size:.67rem; font-weight:800; text-transform:uppercase; letter-spacing:.5px; color:#fff; cursor:pointer; border:2px solid transparent; user-select:none; transition:transform .13s,filter .13s,border-color .13s }
+  .tray-chip:hover { transform:scale(1.08); filter:brightness(1.15) }
+  .tray-chip.sel { border-color:rgba(255,255,255,.75); box-shadow:0 0 10px rgba(255,255,255,.25) }
+  .tray-chip img { width:18px; height:18px; border-radius:50% }
+
+  @media(max-width:750px) { #type-grid { grid-template-columns:repeat(4,1fr) } }
+  @media(max-width:500px) { #type-grid { grid-template-columns:repeat(3,1fr) } }
+
+  /* ═══════════════════════════════════════════════════
+     TEAM BUILDER — FULL REDESIGN
+  ═══════════════════════════════════════════════════ */
+
+  /* Tabs */
+  .tab-bar { flex-shrink:0; display:flex; background:var(--sur); border-bottom:2px solid var(--bdr); padding:0 20px; }
+  .tab-btn { background:none; border:none; border-bottom:2.5px solid transparent; margin-bottom:-2px; color:var(--dim); cursor:pointer; font-size:.75rem; font-weight:700; letter-spacing:1.1px; text-transform:uppercase; padding:10px 18px; font-family:inherit; transition:color .18s,border-color .18s; }
+  .tab-btn:hover { color:var(--text); }
+  .tab-btn.active { color:#a8b4ff; border-bottom-color:#5c6bc0; }
+  #app-main.hidden { display:none !important; }
+
+  /* Team view shell */
+  #team-view { flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  #team-view.hidden { display:none; }
+  #team-body { flex:1; display:grid; grid-template-columns:1fr 340px; min-height:0; overflow:hidden; }
+
+  /* ── Slot strip ── */
+  #team-slots { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; padding:14px 18px; flex-shrink:0; border-bottom:1px solid var(--bdr); background:var(--sur); }
+  .team-slot { background:var(--bg); border:1px solid var(--bdr); border-radius:12px; padding:10px 12px; position:relative; min-height:90px; display:flex; flex-direction:column; gap:7px; transition:border-color .2s,box-shadow .2s; }
+  .team-slot:hover { border-color:#2e3560; }
+  .team-slot.filled { border-color:#2a3270; background:linear-gradient(155deg,rgba(92,107,192,.1),rgba(11,13,26,.7)); box-shadow:0 2px 12px rgba(0,0,0,.3); }
+  .slot-mon { display:flex; align-items:center; gap:9px; }
+  .slot-spr { width:40px; height:40px; image-rendering:pixelated; border-radius:50%; background:rgba(255,255,255,.04); flex-shrink:0; }
+  .slot-info { min-width:0; }
+  .slot-name { font-size:.82rem; font-weight:700; text-transform:capitalize; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); margin-bottom:4px; }
+  .slot-types { display:flex; gap:4px; flex-wrap:wrap; }
+  .slot-chip { font-size:.6rem; font-weight:800; text-transform:uppercase; padding:3px 8px; border-radius:8px; color:#fff; letter-spacing:.5px; }
+  .slot-clear { position:absolute; top:7px; right:8px; background:none; border:none; color:var(--dim); cursor:pointer; font-size:.72rem; padding:3px 5px; border-radius:5px; opacity:.5; transition:opacity .15s,color .15s,background .15s; }
+  .slot-clear:hover { color:#ff5252; opacity:1; background:rgba(255,82,82,.12); }
+  .slot-input-wrap { position:relative; }
+  .slot-input { width:100%; background:rgba(255,255,255,.04); border:1px solid var(--bdr); border-radius:8px; padding:8px 11px; color:var(--text); font-size:.8rem; outline:none; font-family:inherit; transition:border-color .18s,background .18s; }
+  .slot-input:focus { border-color:#5c6bc0; background:rgba(92,107,192,.08); }
+  .slot-input::placeholder { color:var(--dim); }
+  .slot-ac { position:absolute; top:calc(100%+4px); left:0; right:0; background:#0f1224; border:1px solid #2a3060; border-radius:10px; z-index:200; display:none; box-shadow:0 14px 36px rgba(0,0,0,.75); overflow:hidden; }
+  .slot-ac.open { display:block; }
+  .slot-ac-item { padding:9px 13px; font-size:.8rem; cursor:pointer; text-transform:capitalize; border-bottom:1px solid rgba(30,34,64,.35); font-family:inherit; transition:background .1s; }
+  .slot-ac-item:last-child { border-bottom:none; }
+  .slot-ac-item:hover { background:#1a1e3a; color:#fff; }
+  .slot-hint { font-size:.65rem; color:var(--dim); text-align:center; padding:8px 0 0; opacity:.3; letter-spacing:.8px; text-transform:uppercase; }
+
+  /* ── Coverage table (left column) ── */
+  #coverage-wrap { overflow-y:auto; min-height:0; }
+  #coverage-wrap::-webkit-scrollbar { width:5px; }
+  #coverage-wrap::-webkit-scrollbar-thumb { background:#1e2240; border-radius:4px; }
+  .cov-empty { color:var(--dim); text-align:center; padding:70px 20px; font-size:1rem; opacity:.45; }
+  .cov-legend { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:10px 16px; font-size:.7rem; color:var(--dim); border-bottom:1px solid var(--bdr); background:var(--sur); position:sticky; top:0; z-index:4; }
+  .cov-legend-item { display:flex; align-items:center; gap:5px; }
+  .coverage-table { width:100%; border-collapse:collapse; }
+  .coverage-table thead th { font-size:.65rem; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:var(--dim); padding:10px 4px; text-align:center; border-bottom:2px solid var(--bdr); position:sticky; top:41px; background:var(--bg); z-index:3; white-space:nowrap; }
+  .coverage-table thead th.type-hdr { text-align:left; min-width:130px; padding-left:16px; }
+  .coverage-table thead th.sum-hdr { min-width:100px; text-align:left; padding-left:6px; }
+  .member-hdr-cell { display:flex; flex-direction:column; align-items:center; gap:2px; padding:2px 0; }
+  .member-spr { width:38px; height:38px; image-rendering:pixelated; }
+  .member-hdr-name { font-size:.6rem; color:var(--dim); text-transform:capitalize; white-space:nowrap; max-width:64px; overflow:hidden; text-overflow:ellipsis; }
+  .slot-empty-hdr { opacity:.18; font-size:.62rem; }
+  .cov-row { border-bottom:1px solid rgba(30,34,64,.3); transition:background .1s; }
+  .cov-row:hover { background:rgba(92,107,192,.06); }
+  .cov-row.danger  { background:rgba(200,0,0,.07); }
+  .cov-row.caution { background:rgba(255,160,0,.05); }
+  .cov-type-cell { padding:9px 16px; min-width:130px; }
+  .cov-type-inner { display:flex; align-items:center; gap:9px; }
+  .cov-type-inner img { width:24px; height:24px; border-radius:50%; flex-shrink:0; }
+  .cov-type-lbl { font-size:.78rem; font-weight:800; text-transform:uppercase; letter-spacing:.6px; }
+  .cov-alert-icon { font-size:.75rem; width:14px; flex-shrink:0; }
+  .cov-cell { padding:5px 3px; text-align:center; min-width:54px; }
+  .cov-badge { display:inline-flex; align-items:center; justify-content:center; border-radius:7px; font-size:.72rem; font-weight:800; padding:4px 8px; min-width:34px; letter-spacing:.2px; }
+  .cov-neutral { background:rgba(255,255,255,.04); color:rgba(255,255,255,.12); }
+  .cov-weak    { background:rgba(220,50,50,.3);  color:#ff8888; border:1px solid rgba(220,50,50,.4); }
+  .cov-weak4   { background:rgba(150,0,0,.5);    color:#ffbbbb; border:1px solid rgba(200,0,0,.55); }
+  .cov-resist  { background:rgba(50,190,100,.22); color:#6dffa0; border:1px solid rgba(50,190,100,.3); }
+  .cov-qresist { background:rgba(0,200,150,.2);   color:#00e5b0; border:1px solid rgba(0,200,150,.3); }
+  .cov-immune  { background:rgba(200,168,0,.2);   color:#ffd700; border:1px solid rgba(200,168,0,.3); }
+  .cov-sum-cell { padding:5px 10px 5px 4px; min-width:100px; }
+  .sum-line { display:flex; flex-wrap:wrap; gap:4px; }
+
+  /* ── Right Sidebar ── */
+  #team-sidebar { border-left:1px solid var(--bdr); display:flex; flex-direction:column; overflow:hidden; background:rgba(9,11,20,.7); }
+  #hole-panel { flex:0 0 auto; max-height:52%; display:flex; flex-direction:column; overflow:hidden; border-bottom:1px solid var(--bdr); }
+  #hole-panel-scroll { overflow-y:auto; flex:1; }
+  #hole-panel-scroll::-webkit-scrollbar { width:3px; }
+  #hole-panel-scroll::-webkit-scrollbar-thumb { background:#1e2240; }
+  #rec-panel { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+  #rec-panel-scroll { overflow-y:auto; flex:1; }
+  #rec-panel-scroll::-webkit-scrollbar { width:3px; }
+  #rec-panel-scroll::-webkit-scrollbar-thumb { background:#1e2240; }
+
+  /* Panel header */
+  .panel-hdr { font-size:.65rem; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:var(--dim); padding:12px 16px; border-bottom:1px solid rgba(30,34,64,.5); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; background:rgba(9,11,20,.95); backdrop-filter:blur(6px); }
+  .panel-hdr-badge { font-size:.6rem; font-weight:700; padding:2px 8px; border-radius:10px; }
+  .panel-empty { padding:22px 16px; font-size:.8rem; color:var(--dim); opacity:.45; text-align:center; }
+
+  /* Hole cards */
+  .hole-card { padding:12px 16px; border-bottom:1px solid rgba(30,34,64,.35); }
+  .hole-card.danger  { border-left:3px solid rgba(255,60,60,.7); }
+  .hole-card.caution { border-left:3px solid rgba(255,180,0,.6); }
+  .hole-card-hdr { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+  .hole-card-hdr img { width:22px; height:22px; border-radius:50%; }
+  .hole-type-name { font-size:.88rem; font-weight:800; text-transform:uppercase; letter-spacing:.5px; }
+  .hole-hdr-badge { font-size:.62rem; font-weight:800; padding:3px 9px; border-radius:8px; margin-left:auto; }
+  .hole-danger-badge  { background:rgba(200,0,0,.3); color:#ff8888; border:1px solid rgba(200,0,0,.4); }
+  .hole-caution-badge { background:rgba(200,140,0,.25); color:#ffcc66; border:1px solid rgba(200,140,0,.35); }
+  .hole-mons { display:flex; flex-direction:column; gap:5px; }
+  .hole-mon { display:flex; align-items:center; gap:8px; padding:2px 0; }
+  .hole-mon-spr { width:28px; height:28px; image-rendering:pixelated; flex-shrink:0; }
+  .hole-mon-name { font-size:.78rem; font-weight:600; text-transform:capitalize; flex:1; color:var(--text); }
+  .hole-mon-mult { font-size:.65rem; font-weight:900; padding:2px 7px; border-radius:6px; }
+
+  /* Recommendation cards */
+  .rec-controls { display:flex; align-items:center; gap:8px; padding:8px 16px; border-bottom:1px solid rgba(30,34,64,.4); flex-shrink:0; }
+  .rec-controls-lbl { font-size:.62rem; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--dim); }
+  .reg-toggle { display:flex; gap:4px; margin-left:auto; }
+  .reg-btn { background:rgba(255,255,255,.05); border:1px solid var(--bdr); border-radius:6px; color:var(--dim); cursor:pointer; font-size:.62rem; font-weight:700; letter-spacing:.5px; padding:4px 10px; text-transform:uppercase; font-family:inherit; transition:all .15s; }
+  .reg-btn.active { background:rgba(92,107,192,.25); border-color:#5c6bc0; color:#a8b4ff; }
+  .rec-loading { padding:24px 16px; font-size:.8rem; color:var(--dim); text-align:center; opacity:.55; }
+  .rec-card { display:flex; align-items:center; gap:12px; padding:11px 16px; border-bottom:1px solid rgba(30,34,64,.3); transition:background .12s; }
+  .rec-card:hover { background:rgba(92,107,192,.07); }
+  .rec-spr { width:48px; height:48px; image-rendering:pixelated; flex-shrink:0; border-radius:50%; background:rgba(255,255,255,.04); }
+  .rec-info { flex:1; min-width:0; }
+  .rec-types { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:5px; }
+  .rec-name-row { display:flex; align-items:center; gap:7px; margin-bottom:4px; }
+  .rec-name { font-size:.85rem; font-weight:700; text-transform:capitalize; color:var(--text); }
+  .rec-tier-badge { font-size:.58rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase; padding:2px 6px; border-radius:5px; border:1px solid; flex-shrink:0; }
+  .rec-covers { font-size:.67rem; color:var(--dim); line-height:1.4; }
+  .rec-covers strong { color:#6dffa0; font-weight:700; }
+  .rec-synergy { font-size:.62rem; color:var(--dim); margin-top:3px; line-height:1.4; }
+  .rec-synergy .syn-label { opacity:.65; }
+  .rec-synergy .syn-pair { color:#c5b4ff; font-weight:600; }
+  .rec-add-btn { background:rgba(92,107,192,.18); border:1px solid rgba(92,107,192,.4); border-radius:8px; color:#a8b4ff; cursor:pointer; font-size:.67rem; font-weight:700; padding:6px 12px; font-family:inherit; transition:all .15s; white-space:nowrap; flex-shrink:0; }
+  .rec-add-btn:hover { background:rgba(92,107,192,.38); border-color:#7c8fd0; }
+
+  @media(max-width:1150px) { #team-body { grid-template-columns:1fr 300px } }
+  @media(max-width:920px)  { #team-body { grid-template-columns:1fr } #team-sidebar { border-left:none; border-top:1px solid var(--bdr); max-height:260px; flex-direction:row } #hole-panel,#rec-panel { flex:1; max-height:none } #hole-panel { border-bottom:none; border-right:1px solid var(--bdr) } #team-slots { grid-template-columns:repeat(3,1fr) } }
+  @media(max-width:580px)  { #team-slots { grid-template-columns:repeat(2,1fr) } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">PokéType</div>
+  <div class="srch">
+    <input id="poke-input" type="text" placeholder="Search Pokémon…" autocomplete="off" spellcheck="false">
+    <button id="poke-btn">Search</button>
+    <div id="ac-list"></div>
+  </div>
+  <div id="poke-result"></div>
+</header>
+
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab-matchup" onclick="switchTab('matchup')">Type Matchup</button>
+  <button class="tab-btn" id="tab-team" onclick="switchTab('team')">Type Builder</button>
+</div>
+
+<div id="team-view" class="hidden">
+  <div id="team-slots"></div>
+  <div id="team-body">
+    <div id="coverage-wrap"><div class="cov-empty">Add Pokémon above to see team defensive coverage</div></div>
+    <div id="team-sidebar">
+      <div id="hole-panel">
+        <div class="panel-hdr"><span>Defensive Holes</span></div>
+        <div id="hole-panel-scroll"><div class="panel-empty">Add Pokémon to see analysis</div></div>
+      </div>
+      <div id="rec-panel">
+        <div class="panel-hdr"><span>Coverage Picks</span></div>
+        <div id="rec-panel-scroll"><div class="panel-empty">Add Pokémon to get recommendations</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="app-main">
+  <div id="grid-view">
+    <p class="grid-hint">Choose a type · select two from the tray for dual-type</p>
+    <div id="type-grid"></div>
+  </div>
+  <div id="radial-wrap" class="hidden">
+    <svg id="radial-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="def-panel">
+      <div id="def-panel-hdr" onclick="toggleDefPanel()">
+        <span class="def-hdr-title">Details</span>
+        <span id="def-toggle">▲</span>
+      </div>
+      <div id="def-body"></div>
+    </div>
+  </div>
+</div>
+
+<div id="tray" class="hidden">
+  <div class="tray-top">
+    Tap to select · tap again to remove · max 2
+    <button class="clear-link" id="clear-btn">✕ Clear</button>
+  </div>
+  <div id="tray-chips"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════
+//  TYPE DATA
+// ═══════════════════════════════════════════════
+const TYPES = [
+  'normal','fire','water','electric','grass','ice',
+  'fighting','poison','ground','flying','psychic','bug',
+  'rock','ghost','dragon','dark','steel','fairy'
+];
+const TC = {
+  normal:'#9FA19F', fire:'#E62829',    water:'#2980EF',  electric:'#FAC000',
+  grass:'#3FA129',  ice:'#3DCEF3',     fighting:'#FF8000', poison:'#9141CB',
+  ground:'#915121', flying:'#81B9EF',  psychic:'#EF4179', bug:'#91A119',
+  rock:'#AFA981',   ghost:'#704170',   dragon:'#5060E1',  dark:'#624D4E',
+  steel:'#60A1B8',  fairy:'#EF70EF'
+};
+
+// Offensive super-effective (2×)
+const SE = {
+  normal:[], fire:['grass','ice','bug','steel'], water:['fire','ground','rock'],
+  electric:['water','flying'], grass:['water','ground','rock'],
+  ice:['grass','ground','flying','dragon'], fighting:['normal','ice','rock','dark','steel'],
+  poison:['grass','fairy'], ground:['fire','electric','poison','rock','steel'],
+  flying:['grass','fighting','bug'], psychic:['fighting','poison'],
+  bug:['grass','psychic','dark'], rock:['fire','ice','flying','bug'],
+  ghost:['psychic','ghost'], dragon:['dragon'], dark:['psychic','ghost'],
+  steel:['ice','rock','fairy'], fairy:['fighting','dragon','dark']
+};
+// Offensive not-very-effective (0.5×)
+const NVE = {
+  normal:['rock','steel'], fire:['fire','water','rock','dragon'],
+  water:['water','grass','dragon'], electric:['electric','grass','dragon'],
+  grass:['fire','grass','poison','flying','bug','dragon','steel'],
+  ice:['fire','water','ice','steel'], fighting:['poison','flying','psychic','bug','fairy'],
+  poison:['poison','ground','rock','ghost'], ground:['grass','bug'],
+  flying:['electric','rock','steel'], psychic:['psychic','steel'],
+  bug:['fire','fighting','poison','flying','ghost','steel','fairy'],
+  rock:['fighting','ground','steel'], ghost:['dark'], dragon:['steel'],
+  dark:['fighting','dark','fairy'], steel:['fire','water','electric','steel'],
+  fairy:['fire','poison','steel']
+};
+// Offensive no-effect (0×)
+const IMM = {
+  normal:['ghost'], fire:[], water:[], electric:['ground'], grass:[], ice:[],
+  fighting:['ghost'], poison:['steel'], ground:['flying'], flying:[],
+  psychic:['dark'], bug:[], rock:[], ghost:['normal'], dragon:['fairy'],
+  dark:[], steel:[], fairy:[]
+};
+
+// ═══════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════
+const imgSrc = t => `./Pokemon Typings/${t}.png`;
+const cap    = s => s[0].toUpperCase() + s.slice(1);
+const clamp  = (mn, mx, v) => Math.max(mn, Math.min(mx, v));
+
+function arcPositions(types, centerAngleDeg, halfAngle, radius, cx, cy) {
+  if (!types.length) return [];
+  const n = types.length;
+  const usedHalf = n === 1 ? 0 : Math.min(halfAngle, 16 + (halfAngle - 16) * ((n - 1) / 6));
+  return types.map((t, i) => {
+    const frac = n > 1 ? i / (n - 1) : 0.5;
+    const deg  = centerAngleDeg - usedHalf + frac * usedHalf * 2;
+    const rad  = deg * Math.PI / 180;
+    return { type: t, x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) };
+  });
+}
+
+// Multi-row arc — returns [{type,x,y,r}]. CR+NR used to guarantee no overlap with center.
+function multiArc(types, centerDeg, halfAngle, D, cx, cy, CR, NR) {
+  const MAX = 6;
+  if (types.length <= MAX) {
+    return arcPositions(types, centerDeg, halfAngle, D, cx, cy)
+      .map(p => ({ ...p, r: NR }));
+  }
+  const split  = Math.ceil(types.length / 2);
+  const outer  = types.slice(0, split);
+  const inner  = types.slice(split);
+  const NR_I   = Math.ceil(NR * 0.85);
+  const innerD = Math.max(CR + NR_I + 47, D * 0.70);
+  const outerD = innerD + NR_I + NR + 22;
+  const oHalf  = Math.min(halfAngle, 14 + (halfAngle - 14) * (split / MAX));
+  const iHalf  = halfAngle * 0.60;
+  return [
+    ...arcPositions(outer, centerDeg, oHalf, outerD, cx, cy).map(p => ({ ...p, r: NR   })),
+    ...arcPositions(inner, centerDeg, iHalf, innerD, cx, cy).map(p => ({ ...p, r: NR_I }))
+  ];
+}
+
+// Derive single-type defensive profile from offense tables
+function defenseProfile(type) {
+  const weak = [], resist = [], immune = [];
+  for (const atk of TYPES) {
+    if ((SE[atk]  || []).includes(type)) weak.push(atk);
+    else if ((NVE[atk] || []).includes(type)) resist.push(atk);
+    else if ((IMM[atk] || []).includes(type)) immune.push(atk);
+  }
+  return { weak, resist, immune };
+}
+
+// Compute dual-type combined effectiveness map { atk → multiplier }
+function computeDualDef(t1, t2) {
+  const out = {};
+  for (const atk of TYPES) {
+    let m = 1;
+    for (const def of [t1, t2]) {
+      if ((SE[atk]  || []).includes(def)) m *= 2;
+      else if ((NVE[atk] || []).includes(def)) m *= 0.5;
+      else if ((IMM[atk] || []).includes(def)) m *= 0;
+    }
+    if (m !== 1) out[atk] = m;
+  }
+  return out;
+}
+
+// Badge styles (4× now active for dual types)
+const BADGE = {
+  immune:  { text:'0×',  bg:'#c8a800', tc:'#000' },
+  '4x':    { text:'4×',  bg:'#cc0000', tc:'#fff' },
+  quarter: { text:'¼×',  bg:'#008a6e', tc:'#fff' },
+};
+
+// ═══════════════════════════════════════════════
+//  D3 RENDER
+// ═══════════════════════════════════════════════
+function renderMatchup() {
+  const wrap = document.getElementById('radial-wrap');
+  const W = wrap.clientWidth  || 800;
+  const H = wrap.clientHeight || 500;
+  const cx = W / 2, cy = H / 2;
+
+  const CR = clamp(64, 96, Math.min(W, H) * 0.13);
+  const NR = clamp(24, 38, Math.min(W, H) * 0.052);
+  const D  = clamp(158, 240, Math.min(W, H) * 0.36);
+
+  const svg = d3.select('#radial-svg').attr('width', W).attr('height', H);
+  svg.selectAll('*').remove();
+  svg.append('rect').attr('width', W).attr('height', H).attr('fill','var(--bg)');
+
+  const defs = svg.append('defs');
+
+  // ── Draw a satellite type node (image only, no label) ──
+  function drawNode(t, x, y, r, { opacity=1, badgeKey=null }={}) {
+    const g = svg.append('g')
+      .attr('transform', `translate(${x.toFixed(1)},${y.toFixed(1)})`)
+      .attr('opacity', opacity)
+      .style('cursor','pointer')
+      .on('click', () => { selected = [t]; update(); });
+
+    // 4× angry red ring
+    if (badgeKey === '4x') {
+      g.append('circle').attr('r', r+13).attr('fill','#ff0000').attr('opacity',0.13);
+      g.append('circle').attr('r', r+8).attr('fill','none')
+        .attr('stroke','#ff2020').attr('stroke-width',2.8).attr('opacity',0.9);
+    }
+    // ¼× quad-resist green ring
+    if (badgeKey === 'quarter') {
+      g.append('circle').attr('r', r+13).attr('fill','#00c896').attr('opacity',0.13);
+      g.append('circle').attr('r', r+8).attr('fill','none')
+        .attr('stroke','#00e5b0').attr('stroke-width',2.8).attr('opacity',0.9);
+    }
+    // 0× immune gold ring
+    if (badgeKey === 'immune') {
+      g.append('circle').attr('r', r+13).attr('fill','#c8a800').attr('opacity',0.16);
+      g.append('circle').attr('r', r+8).attr('fill','none')
+        .attr('stroke','#ffd700').attr('stroke-width',2.8).attr('opacity',0.9);
+    }
+
+    g.append('circle').attr('r', r+7).attr('fill',TC[t]).attr('opacity',0.20);
+    g.append('circle').attr('r', r).attr('fill',TC[t]).attr('opacity',0.42);
+    const sz = r * 2.25;
+    g.append('image').attr('href',imgSrc(t)).attr('x',-sz/2).attr('y',-sz/2)
+      .attr('width',sz).attr('height',sz).attr('preserveAspectRatio','xMidYMid meet');
+
+    if (badgeKey && BADGE[badgeKey]) {
+      const bd = BADGE[badgeKey];
+      const bx = r-2, by = -r+4;
+      const bw = badgeKey==='4x' ? 26 : 22, bh = 15;
+      g.append('rect').attr('x',bx-bw/2).attr('y',by-bh/2)
+        .attr('width',bw).attr('height',bh).attr('rx',5)
+        .attr('fill',bd.bg).attr('stroke','rgba(0,0,0,.3)').attr('stroke-width',.8);
+      g.append('text').attr('x',bx).attr('y',by+5)
+        .attr('text-anchor','middle').attr('fill',bd.tc)
+        .attr('font-size', badgeKey==='4x'?9:8).attr('font-weight',900).text(bd.text);
+    }
+  }
+
+  // ── Section label ──
+  function secLabel(text, x, y, color, size=10.5) {
+    svg.append('text').attr('x',x).attr('y',y).attr('text-anchor','middle')
+      .attr('fill',color).attr('font-size',size).attr('font-family',"'Segoe UI',system-ui")
+      .attr('font-weight',800).attr('letter-spacing',1.8).attr('opacity',.88).text(text);
+  }
+
+  // ══════════════════════════════════════════
+  //  SINGLE-TYPE VIEW
+  // ══════════════════════════════════════════
+  if (selected.length === 1) {
+    const type = selected[0];
+
+    // Glow
+    const rg = defs.append('radialGradient').attr('id','cg').attr('cx','50%').attr('cy','50%').attr('r','50%');
+    rg.append('stop').attr('offset','0%').attr('stop-color',TC[type]).attr('stop-opacity',.15);
+    rg.append('stop').attr('offset','100%').attr('stop-color',TC[type]).attr('stop-opacity',0);
+    svg.append('ellipse').attr('cx',cx).attr('cy',cy).attr('rx',W*.26).attr('ry',H*.32).attr('fill','url(#cg)');
+
+    const seList  = SE[type]  || [];
+    const { weak: weakList } = defenseProfile(type);
+    const sePos    = multiArc(seList,   270, 72, D, cx, cy, CR, NR);
+    const belowPos = multiArc(weakList,  90, 72, D, cx, cy, CR, NR);
+
+    // SE nodes (top)
+    for (const { type:t, x, y, r } of sePos) drawNode(t, x, y, r);
+
+    // Weak To nodes (bottom)
+    for (const { type:t, x, y, r } of belowPos) drawNode(t, x, y, r, { opacity:0.88 });
+
+    // Center: single type node
+    {
+      const c = TC[type], sz = CR * 2.05;
+      const g = svg.append('g').attr('transform',`translate(${cx.toFixed(1)},${cy.toFixed(1)})`);
+      g.append('circle').attr('r',CR+22).attr('fill',c).attr('opacity',.07);
+      g.append('circle').attr('r',CR+11).attr('fill',c).attr('opacity',.12);
+      g.append('circle').attr('r',CR).attr('fill',c).attr('opacity',.52);
+      g.append('image').attr('href',imgSrc(type)).attr('x',-sz/2).attr('y',-sz/2)
+        .attr('width',sz).attr('height',sz).attr('preserveAspectRatio','xMidYMid meet');
+      g.append('circle').attr('r',CR).attr('fill','none')
+        .attr('stroke','rgba(255,255,255,.35)').attr('stroke-width',2.5);
+      g.append('text').attr('y',CR+26).attr('text-anchor','middle').attr('fill',c)
+        .attr('font-size',12).attr('font-family',"'Segoe UI',system-ui")
+        .attr('font-weight',900).attr('letter-spacing',1.8).attr('opacity',.92)
+        .text(type.toUpperCase());
+    }
+
+    // Labels
+    if (seList.length) {
+      const topY = Math.min(...sePos.map(p=>p.y-p.r)) - 30;
+      secLabel('SUPER EFFECTIVE AGAINST', cx, topY, '#ffaf37');
+    } else {
+      secLabel('NO SUPER EFFECTIVE TARGETS', cx, cy-D-NR-30, 'rgba(255,175,55,.3)', 9.5);
+    }
+    if (weakList.length) {
+      const botY = Math.max(...belowPos.map(p=>p.y+p.r)) + 34;
+      secLabel('WEAK TO', cx, botY, 'rgba(255,100,100,.9)');
+    } else {
+      secLabel('NO WEAKNESSES', cx, cy+D+NR+34, 'rgba(255,100,100,.28)', 9.5);
+    }
+
+    renderDefPanel();
+    return;
+  }
+
+  // ══════════════════════════════════════════
+  //  DUAL-TYPE VIEW
+  // ══════════════════════════════════════════
+  const [t1, t2] = selected;
+
+  // Subtle ambient glow — just a soft halo around the center, not a full-screen oval
+  const rg2 = defs.append('radialGradient').attr('id','dg').attr('cx','50%').attr('cy','50%').attr('r','50%');
+  rg2.append('stop').attr('offset','0%').attr('stop-color',TC[t1]).attr('stop-opacity',.10);
+  rg2.append('stop').attr('offset','60%').attr('stop-color',TC[t2]).attr('stop-opacity',.06);
+  rg2.append('stop').attr('offset','100%').attr('stop-color',TC[t2]).attr('stop-opacity',0);
+  svg.append('ellipse').attr('cx',cx).attr('cy',cy).attr('rx',CR*3.2).attr('ry',CR*3.2).attr('fill','url(#dg)');
+
+  // Compute dual-type matchups
+  const dualDef  = computeDualDef(t1, t2);
+  const weak4    = Object.entries(dualDef).filter(([,m])=>m===4).map(([t])=>t);
+  const weak2    = Object.entries(dualDef).filter(([,m])=>m===2).map(([t])=>t);
+  const immune   = Object.entries(dualDef).filter(([,m])=>m===0).map(([t])=>t);
+  const resist4  = Object.entries(dualDef).filter(([,m])=>m===0.25).map(([t])=>t);
+  const resist2  = Object.entries(dualDef).filter(([,m])=>m===0.5).map(([t])=>t);
+  const allWeak   = [...weak4,   ...weak2];               // 4× first → outer arc
+  const allResist = [...immune, ...resist4, ...resist2];  // immune outermost, then ¼×, then ½×
+
+  // Shift yin-yang up slightly to visually balance type-name labels beneath it
+  const yycy = cy - 20;
+
+  // ── Resist nodes — top arc ──
+  // ¼× nodes get green ring + badge, drawn 12% larger
+  const abovePos = multiArc(allResist, 270, 74, D, cx, yycy, CR, NR);
+  for (const { type:t, x, y, r } of abovePos) {
+    const isImm = immune.includes(t);
+    const isQ   = resist4.includes(t);
+    drawNode(t, x, y, (isImm || isQ) ? r*1.12 : r, {
+      opacity:  0.92,
+      badgeKey: isImm ? 'immune' : isQ ? 'quarter' : null
+    });
+  }
+
+  // ── Weakness nodes — bottom arc ──
+  // 4× nodes get red ring + badge, drawn 12% larger
+  const belowPos = multiArc(allWeak, 90, 74, D, cx, yycy, CR, NR);
+  for (const { type:t, x, y, r } of belowPos) {
+    const is4x = weak4.includes(t);
+    drawNode(t, x, y, is4x ? r*1.12 : r, {
+      opacity:  0.92,
+      badgeKey: is4x ? '4x' : null
+    });
+  }
+
+  // ── Yin-yang center ──
+  {
+    const R   = CR;
+    const hR  = R / 2;   // inner S-curve radius — R/2 for correct yin-yang geometry
+    // Icons fill each half: diameter = R (same as the half-circle width), centered at ±hR
+    const iSz  = R;
+    const iR   = iSz / 2;
+
+    // Classic yin-yang: yang (t1, right sweep), yin (t2, left sweep)
+    const yy1 = `M0,${-R} A${R},${R} 0 0,1 0,${R} A${hR},${hR} 0 0,0 0,0 A${hR},${hR} 0 0,1 0,${-R}Z`;
+    const yy2 = `M0,${-R} A${R},${R} 0 0,0 0,${R} A${hR},${hR} 0 0,1 0,0 A${hR},${hR} 0 0,0 0,${-R}Z`;
+
+    const g = svg.append('g').attr('transform',`translate(${cx.toFixed(1)},${yycy.toFixed(1)})`);
+
+    // Yin-yang halves
+    g.append('path').attr('d',yy1).attr('fill',TC[t1]);
+    g.append('path').attr('d',yy2).attr('fill',TC[t2]);
+
+    // Type icons — centered at ±hR (the natural center of each half-circle)
+    // No dots — they'd be hidden under the icons anyway
+    g.append('image').attr('href',imgSrc(t1)).attr('x',-iR).attr('y',-hR-iR)
+      .attr('width',iSz).attr('height',iSz).attr('preserveAspectRatio','xMidYMid meet');
+    g.append('image').attr('href',imgSrc(t2)).attr('x',-iR).attr('y', hR-iR)
+      .attr('width',iSz).attr('height',iSz).attr('preserveAspectRatio','xMidYMid meet');
+
+    // Outer ring drawn LAST — clean border on top of everything
+    g.append('circle').attr('r',R).attr('fill','none')
+      .attr('stroke','rgba(255,255,255,.35)').attr('stroke-width',2);
+
+    // Clickable half-circle hit areas — tap a half to drop that type
+    g.append('path')
+      .attr('d',`M${-R},0 A${R},${R} 0 0,1 ${R},0 Z`)   // top semicircle → drops t1
+      .attr('fill','transparent').style('cursor','pointer')
+      .on('click', () => { selected=[t2]; update(); });
+    g.append('path')
+      .attr('d',`M${-R},0 A${R},${R} 0 0,0 ${R},0 Z`)   // bottom semicircle → drops t2
+      .attr('fill','transparent').style('cursor','pointer')
+      .on('click', () => { selected=[t1]; update(); });
+
+    // Type name labels beneath yin-yang — clickable to deselect
+    const ly  = R + 30;
+    const sep = 16;
+    svg.append('text').attr('x',cx-sep).attr('y',yycy+ly)
+      .attr('text-anchor','end').attr('fill',TC[t1]).attr('font-size',11)
+      .attr('font-family',"'Segoe UI',system-ui").attr('font-weight',900)
+      .attr('letter-spacing',1.5).attr('opacity',.92).style('cursor','pointer')
+      .on('click',()=>{selected=[t2];update();}).text(t1.toUpperCase());
+    svg.append('text').attr('x',cx).attr('y',yycy+ly)
+      .attr('text-anchor','middle').attr('fill','rgba(255,255,255,.25)')
+      .attr('font-size',10).attr('font-family',"'Segoe UI',system-ui").text('/');
+    svg.append('text').attr('x',cx+sep).attr('y',yycy+ly)
+      .attr('text-anchor','start').attr('fill',TC[t2]).attr('font-size',11)
+      .attr('font-family',"'Segoe UI',system-ui").attr('font-weight',900)
+      .attr('letter-spacing',1.5).attr('opacity',.92).style('cursor','pointer')
+      .on('click',()=>{selected=[t1];update();}).text(t2.toUpperCase());
+  }
+
+  // Section labels — with generous padding from outermost nodes
+  if (allResist.length) {
+    const topY = Math.min(...abovePos.map(p=>p.y-p.r)) - 30;
+    const topNote = immune.length && resist4.length ? 'RESISTS & IMMUNE  ·  0× ¼× HIGHLIGHTED'
+                  : immune.length  ? 'RESISTS & IMMUNE  ·  0× HIGHLIGHTED'
+                  : resist4.length ? 'RESISTS  ·  ¼× HIGHLIGHTED' : 'RESISTS';
+    secLabel(topNote, cx, topY, 'rgba(60,220,170,.9)');
+  } else {
+    secLabel('NO RESISTANCES', cx, yycy-D-NR-30, 'rgba(60,220,170,.28)', 9.5);
+  }
+  if (allWeak.length) {
+    const botY = Math.max(...belowPos.map(p=>p.y+p.r)) + 34;
+    secLabel(weak4.length ? 'WEAK TO  ·  4× HIGHLIGHTED' : 'WEAK TO', cx, botY, 'rgba(255,100,100,.9)');
+  } else {
+    secLabel('NO WEAKNESSES', cx, yycy+D+NR+34, 'rgba(255,100,100,.28)', 9.5);
+  }
+
+  renderDefPanel();
+}
+
+// ═══════════════════════════════════════════════
+//  DEFENSE PANEL
+// ═══════════════════════════════════════════════
+function renderDefPanel() {
+  const panel = document.getElementById('def-panel');
+  const body  = document.getElementById('def-body');
+  const isDual = selected.length === 2;
+
+  const chips = arr => arr.length
+    ? arr.map(t=>`<span class="def-chip" style="background:${TC[t]}cc">${cap(t)}</span>`).join('')
+    : '<span class="def-none">None</span>';
+
+  const sections = [];
+
+  if (!isDual) {
+    // Single: NVE/immune (offense bounce-offs) + resist + immune (defense)
+    const type = selected[0];
+    const nveAll = [...(NVE[type]||[]), ...(IMM[type]||[])];
+    const { resist, immune } = defenseProfile(type);
+    if (nveAll.length)
+      sections.push(`<div class="def-section">
+        <div class="def-section-lbl" style="color:#74b9ff">Not Very Effective On</div>
+        <div class="def-chips">${chips(nveAll)}</div>
+      </div>`);
+    if (resist.length)
+      sections.push(`<div class="def-section">
+        <div class="def-section-lbl" style="color:#5ecf8a">Resists (½×)</div>
+        <div class="def-chips">${chips(resist)}</div>
+      </div>`);
+    if (immune.length)
+      sections.push(`<div class="def-section">
+        <div class="def-section-lbl" style="color:#ffd700">Immune</div>
+        <div class="def-chips">${chips(immune)}</div>
+      </div>`);
+  } else {
+    // Dual: combined resists (½×, ¼×) + immune — no NVE (not relevant)
+    const [t1, t2] = selected;
+    const dd = computeDualDef(t1, t2);
+    const resists  = Object.entries(dd).filter(([,m])=>m===0.5).map(([t])=>t);
+    const qresists = Object.entries(dd).filter(([,m])=>m===0.25).map(([t])=>t);
+    const immune   = Object.entries(dd).filter(([,m])=>m===0).map(([t])=>t);
+    if (resists.length)
+      sections.push(`<div class="def-section">
+        <div class="def-section-lbl" style="color:#5ecf8a">Resists (½×)</div>
+        <div class="def-chips">${chips(resists)}</div>
+      </div>`);
+    if (qresists.length)
+      sections.push(`<div class="def-section">
+        <div class="def-section-lbl" style="color:#00e5cc">Quad Resist (¼×)</div>
+        <div class="def-chips">${chips(qresists)}</div>
+      </div>`);
+    if (immune.length)
+      sections.push(`<div class="def-section">
+        <div class="def-section-lbl" style="color:#ffd700">Immune</div>
+        <div class="def-chips">${chips(immune)}</div>
+      </div>`);
+  }
+
+  if (!sections.length)
+    sections.push(`<div class="def-none">No notable matchups</div>`);
+
+  body.innerHTML = sections.join('');
+  panel.style.display = 'block';
+}
+
+function toggleDefPanel() {
+  document.getElementById('def-panel').classList.toggle('collapsed');
+}
+
+// ═══════════════════════════════════════════════
+//  VIEW ROUTING
+// ═══════════════════════════════════════════════
+function showGrid() {
+  document.getElementById('grid-view').classList.remove('hidden');
+  document.getElementById('radial-wrap').classList.add('hidden');
+  document.getElementById('tray').classList.add('hidden');
+  document.getElementById('def-panel').style.display = 'none';
+}
+function showRadial() {
+  document.getElementById('grid-view').classList.add('hidden');
+  document.getElementById('radial-wrap').classList.remove('hidden');
+  document.getElementById('tray').classList.remove('hidden');
+  renderTray();
+  requestAnimationFrame(() => renderMatchup());
+}
+function update() { selected.length === 0 ? showGrid() : showRadial(); }
+
+// ═══════════════════════════════════════════════
+//  STATE & SELECTION
+// ═══════════════════════════════════════════════
+let selected = [];
+
+// Grid tile → fresh single selection
+function selectType(t) { selected = [t]; update(); }
+
+// Tray chip → toggle (tap selected to remove, tap unselected to add)
+function trayClick(t) {
+  if (selected.includes(t)) {
+    selected = selected.filter(x => x !== t);
+  } else if (selected.length < 2) {
+    selected = [...selected, t];
+  } else {
+    selected = [selected[0], t]; // replace second
+  }
+  update();
+}
+
+// Satellite node click → navigate to that single type
+window.navType = t => { selected = [t]; update(); };
+
+document.getElementById('clear-btn').addEventListener('click', () => { selected = []; update(); });
+window.addEventListener('resize', () => {
+  if (selected.length) requestAnimationFrame(() => renderMatchup());
+});
+
+// ═══════════════════════════════════════════════
+//  GRID
+// ═══════════════════════════════════════════════
+function buildGrid() {
+  document.getElementById('type-grid').innerHTML = TYPES.map(t => `
+    <div class="type-tile" style="background:${TC[t]}cc" onclick="selectType('${t}')">
+      <img src="${imgSrc(t)}" alt="${t}" onerror="this.style.display='none'">
+      <span class="tile-name">${t}</span>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════
+//  TRAY
+// ═══════════════════════════════════════════════
+function renderTray() {
+  document.getElementById('tray-chips').innerHTML = TYPES.map(t => `
+    <span class="tray-chip${selected.includes(t) ? ' sel' : ''}"
+      style="background:${TC[t]}cc" onclick="trayClick('${t}')">
+      <img src="${imgSrc(t)}" alt="${t}" onerror="this.style.display='none'">
+      ${cap(t)}
+    </span>`).join('');
+}
+
+// ═══════════════════════════════════════════════
+//  AUTOCOMPLETE
+// ═══════════════════════════════════════════════
+let pokeNames = [];
+let acActive  = -1;
+
+async function fetchPokeNames() {
+  try {
+    const r = await fetch('https://pokeapi.co/api/v2/pokemon?limit=2000');
+    const d = await r.json();
+    pokeNames = d.results.map(p => p.name);
+  } catch { }
+}
+
+function showAC(matches) {
+  const list = document.getElementById('ac-list');
+  if (!matches.length) { hideAC(); return; }
+  list.innerHTML = matches.map(n =>
+    `<div class="ac-item" onclick="acSelect('${n}')">${cap(n)}</div>`
+  ).join('');
+  list.classList.add('open');
+  acActive = -1;
+}
+function hideAC() { document.getElementById('ac-list').classList.remove('open'); acActive = -1; }
+function acSelect(name) { document.getElementById('poke-input').value = name; hideAC(); searchPoke(); }
+
+const pokeInput = document.getElementById('poke-input');
+pokeInput.addEventListener('input', function() {
+  const val = this.value.trim().toLowerCase();
+  if (val.length < 4) { hideAC(); return; }
+  const starts   = pokeNames.filter(n => n.startsWith(val));
+  const contains = pokeNames.filter(n => !n.startsWith(val) && n.includes(val));
+  showAC([...starts, ...contains].slice(0, 8));
+});
+pokeInput.addEventListener('keydown', function(e) {
+  const items = document.querySelectorAll('#ac-list .ac-item');
+  if (!items.length && e.key === 'Enter') { searchPoke(); return; }
+  if (e.key === 'ArrowDown') { e.preventDefault(); acActive = Math.min(acActive+1,items.length-1); items.forEach((el,i)=>el.classList.toggle('active',i===acActive)); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); acActive = Math.max(acActive-1,-1); items.forEach((el,i)=>el.classList.toggle('active',i===acActive)); }
+  else if (e.key === 'Enter') { if (acActive>=0 && items[acActive]) acSelect(items[acActive].textContent.toLowerCase()); else { hideAC(); searchPoke(); } }
+  else if (e.key === 'Escape') hideAC();
+});
+document.addEventListener('click', e => { if (!e.target.closest('.srch')) hideAC(); });
+
+// ═══════════════════════════════════════════════
+//  POKÉAPI
+// ═══════════════════════════════════════════════
+async function searchPoke() {
+  const name = document.getElementById('poke-input').value.trim().toLowerCase();
+  const el   = document.getElementById('poke-result');
+  if (!name) return;
+  el.innerHTML = `<span class="spin"></span>`;
+  try {
+    const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${name}`);
+    if (!r.ok) throw 0;
+    const d     = await r.json();
+    const types = d.types.sort((a,b)=>a.slot-b.slot).map(t=>t.type.name).filter(t=>TYPES.includes(t));
+    const sprite = d.sprites.front_default;
+    el.innerHTML =
+      (sprite ? `<img class="spr" src="${sprite}" alt="">` : '')
+      + `<span class="pkn">${cap(d.name)}</span>`
+      + types.map(t=>`<span class="mini-chip" style="background:${TC[t]||'#888'}"><img src="${imgSrc(t)}" onerror="this.style.display='none'">${cap(t)}</span>`).join('');
+    selected = types.slice(0, 2); // support dual types from PokéAPI
+    update();
+  } catch {
+    el.innerHTML = `<span class="srch-err">Pokémon not found</span>`;
+  }
+}
+document.getElementById('poke-btn').addEventListener('click', searchPoke);
+pokeInput.addEventListener('keydown', e => { if (e.key==='Enter' && acActive<0) searchPoke(); });
+
+// ═══════════════════════════════════════════════
+//  TEAM BUILDER
+// ═══════════════════════════════════════════════
+let team = Array(6).fill(null); // { name, sprite, types:[] }
+let activeTab = 'matchup';
+let svMode      = true;
+let svRegCache  = null;   // Set of species names legal in SV Reg G (Paldea + Kitakami + Blueberry)
+const evoChainCache = {};  // chainUrl → chain JSON (shared across candidates in same family)
+const partnerCache  = {};  // `${stName}:${formatCode}` → Map<partnerStName, appearPct>
+
+// Truly mythical / restricted legendaries that aren't legal in standard VGC formats.
+// NOTE: Treasures of Ruin (wo-chien/chien-pao/ting-lu/chi-yu), Ogerpon, and
+// Urshifu are NOT here — they ARE legal & used in Reg G VGC.
+const LEGENDARIES = new Set([
+  // ── Gen 1 ──
+  'mewtwo','mew',
+  'articuno','zapdos','moltres',                          // Kanto birds — restricted in all standard VGC
+  'articuno-galar','zapdos-galar','moltres-galar',
+
+  // ── Gen 2 ──
+  'lugia','ho-oh','celebi',
+  'raikou','entei','suicune',                             // Johto beasts — restricted
+
+  // ── Gen 3 ──
+  'kyogre','groudon','rayquaza','jirachi','deoxys',
+  'regirock','regice','registeel',                        // Original Regis — restricted
+  'latias','latios',                                      // Eon duo — restricted
+
+  // ── Gen 4 ──
+  'dialga','palkia','giratina','arceus','phione','manaphy','darkrai','shaymin','heatran','regigigas',
+  'uxie','mesprit','azelf',                              // Lake trio — restricted
+
+  // ── Gen 5 ──
+  'reshiram','zekrom','kyurem','victini','keldeo','meloetta','genesect',
+  'cobalion','terrakion','virizion',                      // Swords of Justice — restricted
+
+  // ── Gen 6 ──
+  'xerneas','yveltal','zygarde','diancie','hoopa','volcanion',
+
+  // ── Gen 7 ──
+  'cosmog','cosmoem','solgaleo','lunala','necrozma','magearna','marshadow','zeraora','meltan','melmetal',
+  'tapu-koko','tapu-lele','tapu-bulu','tapu-fini',        // Tapus — restricted
+  // Ultra Beasts — restricted in standard VGC
+  'nihilego','buzzwole','pheromosa','xurkitree','celesteela','kartana','guzzlord',
+  'poipole','naganadel','stakataka','blacephalon',
+
+  // ── Gen 8 ──
+  'zacian','zamazenta','eternatus','kubfu','zarude','regieleki','regidrago','glastrier','spectrier',
+  'calyrex','enamorus',                                   // enamorus added
+  'type-null','silvally',                                 // RKS System — restricted
+
+  // ── Gen 9 ──
+  'koraidon','miraidon',
+  'okidogi','munkidori','fezandipiti','pecharunt',
+  'terapagos','ogerpon-teal'
+  // NOTE: urshifu, wo-chien, chien-pao, ting-lu, chi-yu, ogerpon, landorus, tornadus,
+  // thundurus, cresselia ARE legal in standard VGC — intentionally NOT in this list.
+]);
+
+// VGC 2026 Regulation M-A (Pokémon Champions) competitive usage scores (0–100).
+// Source: showdowntier.com — 92,467 battles analyzed May 13–22, 2026.
+// Score = round(usage% × 3), capped at 100. Win rate used as secondary signal.
+// Pokémon absent default to 0 (still shown, just ranked below known meta picks).
+const VGC_USAGE = {
+  // ── A-tier (top win rate + high usage) ──
+  'basculegion':100,  // 33.24% / 52.87% win
+  'garchomp':93,      // 30.99% / 51.71% win
+  'charizard':88,     // 21.69% / 52.62% win  ← note: includes Mega-Y in practice
+  'kingambit':89,     // 29.75% / 51.73% win
+
+  // ── B-tier ──
+  'whimsicott':55,    // 18.31% / 51.47%
+  'sylveon':44,       // 14.81% / 51.43%
+  'floette-eternal':34, // 11.35% / 52.25%
+  'glimmora':32,      // 10.66% / 52.42%
+
+  // ── C-tier ──
+  'sneasler':78,      // 26.09% / 49.58%
+  'incineroar':68,    // 22.69% / 48.58%
+  'sinistcha':66,     // 21.86% / 48.91%
+  'farigiraf':60,     // 19.84% / 50.22%
+  'aerodactyl':54,    // 18.02% / 50.54%
+  'archaludon':48,    // 16.00% / 50.76%
+  'pelipper':40,      // 13.20% / 50.08%
+  'tyranitar':31,     // 10.42% / 50.67%
+  'venusaur':25,      // 8.18%  / 50.22%
+  'blastoise':22,     // 7.42%  / 52.20%
+  'dragonite':22,     // 7.37%  / 50.06%
+  'kangaskhan':21,    // 6.96%  / 50.67%
+  'torkoal':21,       // 6.94%  / 50.33%
+  'scizor':20,        // 6.78%  / 50.42%
+  'corviknight':18,   // 6.11%  / 50.88%
+  'excadrill':17,     // 5.52%  / 50.66%
+  'scovillain':16,    // 5.21%  / 50.65%
+
+  // ── D-tier ──
+  'sableye':33,       // 10.90% / 48.81%
+  'rotom-wash':32,    // 10.50% / 48.96%
+  'milotic':25,       // 8.21%  / 48.33%
+  'gengar':24,        // 8.11%  / 47.58%
+  'aegislash':18,     // 5.86%  / 49.17%
+  'talonflame':17,    // 5.78%  / 49.84%
+  'ninetales-alola':17, // 5.59% / 48.99%
+  'primarina':16,     // 5.34%  / 49.72%
+  'gardevoir':16,     // 5.23%  / 49.86%
+  'politoed':16,      // 5.19%  / 48.79%
+  'maushold':15,      // 5.10%  / 48.03%
+  'kommo-o':14,       // 4.71%  / 49.66%
+  'froslass':13,      // 4.44%  / 49.50%
+  'lopunny':12,       // 4.16%  / 49.66%
+  'gallade':12,       // 4.13%  / 49.31%
+  'meganium':12,      // 3.96%  / 48.02%
+  'hydreigon':12,     // 3.85%  / 50.60%
+  'tsareena':11,      // 3.72%  / 49.45%
+  'camerupt':11,      // 3.52%  / 49.24%
+  'delphox':10,       // 3.39%  / 49.46%
+  'ceruledge':9,      // 2.97%  / 49.83%
+  'vivillon':6,       // 2.02%  / 52.86%
+
+  // ── E-tier ──
+  'dragapult':8,      // 2.52%  / 48.07%
+  'zoroark-hisui':8,  // 2.51%  / 48.32%
+  'rotom-heat':7,     // 2.43%  / 49.51%
+  'meowscarada':7,    // 2.41%  / 48.49%
+  'skarmory':7,       // 2.40%  / 49.28%
+  'typhlosion-hisui':7, // 2.40% / 49.55%
+  'snorlax':7,        // 2.33%  / 47.97%
+  'volcarona':7,      // 2.32%  / 48.72%
+  'gyarados':6,       // 2.10%  / 49.32%
+  'espathra':6,       // 2.06%  / 47.36%
+  'tinkaton':6,       // 2.03%  / 47.34%
+  'oranguru':8,       // 2.57%  / 47.60%
+  'hawlucha':6,       // 1.98%  / 47.18%
+  'mimikyu':6,        // 1.97%  / 50.18%
+  'azumarill':6,      // 1.86%  / 49.26%
+  'drampa':6,         // 1.86%  / 46.94%
+  'clefable':5,       // 1.70%  / 46.91%
+  'weavile':5,        // 1.69%  / 50.75%
+  'araquanid':5,      // 1.68%  / 47.30%
+  'starmie':5,        // 1.62%  / 47.10%
+  'samurott-hisui':5, // 1.62%  / 49.70%
+  'arcanine-hisui':5, // 1.59%  / 49.74%
+  'chandelure':5,     // 1.56%  / 48.93%
+  'hatterene':4,      // 1.42%  / 46.38%
+  'palafin':4,        // 1.35%  / 46.22%
+  'mamoswine':4,      // 1.26%  / 49.89%
+  'aggron':3,         // 1.09%  / 47.32%
+  'ampharos':3,       // 1.08%  / 46.10%
+  'greninja':3,       // 1.07%  / 46.54%
+  'kleavor':3,        // 1.01%  / 50.24%
+  'tauros-paldea-aqua':3, // 1.01% / 49.33%
+  'lucario':9,        // 3.02%  / 45.98%
+  'crabominable':9,   // 3.01%  / 48.00%
+};
+
+// VGC SV Regulation F (Pokémon HOME Series / SV formats) competitive usage scores (0–100).
+// Source: showdowntier.com format 'df' — SV-restricted doubles meta.
+// Score = round(usage% × 3), capped at 100.
+// Used when svMode = false (SV Reg G button). Pokémon absent default to 0.
+const SV_VGC_USAGE = {
+  // ── S-tier ──
+  'incineroar':100,          // 37.43%
+  'flutter-mane':100,        // 33.61%
+
+  // ── A-tier ──
+  'tornadus':65,             // 21.64%
+  'raging-bolt':61,          // 20.40%
+  'rillaboom':61,            // 20.17%
+  'amoonguss':58,            // 19.19%
+  'urshifu-rapid-strike':54, // 17.89%
+  'iron-hands':45,           // ~15% est.
+
+  // ── B-tier ──
+  'ogerpon-wellspring':43,   // 14.36%
+  'landorus-therian':42,     // 13.86%
+  'farigiraf':40,            // 13.26%
+  'indeedee-f':39,           // 13.11%
+  'chien-pao':37,            // 12.39%
+  'torkoal':34,              // 11.21%
+  'iron-bundle':28,          // ~9.3% est.
+  'wo-chien':25,             // ~8.5% est.
+
+  // ── C-tier ──
+  'ting-lu':22,              // ~7.3% est.
+  'roaring-moon':22,         // ~7.2% est.
+  'iron-valiant':20,         // ~6.7% est.
+  'chi-yu':18,               // ~6.1% est.
+  'gastrodon':18,            // ~6.0% est.
+  'pelipper':18,             // ~5.9% est.
+  'cresselia':15,            // ~5.0% est.
+  'ursaluna-bloodmoon':15,   // ~4.9% est.
+  'dondozo':14,              // ~4.7% est.
+  'tatsugiri':14,            // ~4.6% est.
+  'ogerpon':12,              // ~4.0% est. (teal/base)
+
+  // ── D-tier ──
+  'armarouge':10,            // ~3.4% est.
+  'meowscarada':10,          // ~3.3% est.
+  'skeledirge':9,            // ~3.0% est.
+  'clodsire':9,              // ~2.9% est.
+  'palafin':8,               // ~2.7% est.
+  'quaquaval':7,             // ~2.4% est.
+  'arboliva':6,              // ~2.0% est.
+  'glimmora':6,              // ~2.0% est.
+  'iron-moth':6,             // ~1.9% est.
+  'gholdengo':5,             // ~1.7% est.
+};
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tab-matchup').classList.toggle('active', tab === 'matchup');
+  document.getElementById('tab-team').classList.toggle('active', tab === 'team');
+  const appMain  = document.getElementById('app-main');
+  const tray     = document.getElementById('tray');
+  const teamView = document.getElementById('team-view');
+  if (tab === 'matchup') {
+    appMain.classList.remove('hidden');
+    teamView.classList.add('hidden');
+    if (selected.length) tray.classList.remove('hidden');
+  } else {
+    appMain.classList.add('hidden');
+    tray.classList.add('hidden');
+    teamView.classList.remove('hidden');
+    renderTeamSlots();
+    renderCoverage();
+  }
+}
+
+// Per-member defensive map { atk → multiplier }
+function computeMemberDef(member) {
+  if (!member?.types?.length) return {};
+  const [t1, t2] = member.types;
+  if (t2) return computeDualDef(t1, t2);
+  const map = {}, { weak, resist, immune } = defenseProfile(t1);
+  for (const t of weak)   map[t] = 2;
+  for (const t of resist) map[t] = 0.5;
+  for (const t of immune) map[t] = 0;
+  return map;
+}
+
+// ── Slots ──
+function renderTeamSlots() {
+  document.getElementById('team-slots').innerHTML = team.map((m, i) => m
+    ? `<div class="team-slot filled">
+        <button class="slot-clear" onclick="clearTeamMember(${i})" title="Remove">✕</button>
+        <div class="slot-mon">
+          <img class="slot-spr" src="${m.sprite || ''}" alt="">
+          <div class="slot-info">
+            <div class="slot-name">${cap(m.name)}</div>
+            <div class="slot-types">${m.types.map(t=>`<span class="slot-chip" style="background:${TC[t]}cc">${cap(t)}</span>`).join('')}</div>
+          </div>
+        </div>
+      </div>`
+    : `<div class="team-slot">
+        <div class="slot-input-wrap">
+          <input class="slot-input" type="text" placeholder="Search Pokémon…"
+            oninput="slotInput(this,${i})" onkeydown="slotKey(event,this,${i})"
+            autocomplete="off" spellcheck="false">
+          <div class="slot-ac" id="slot-ac-${i}"></div>
+        </div>
+        <div class="slot-hint">SLOT ${i+1}</div>
+      </div>`
+  ).join('');
+}
+
+function clearTeamMember(i) { team[i] = null; renderTeamSlots(); renderCoverage(); }
+
+async function addTeamMember(i, name) {
+  try {
+    const r = await fetch(`https://pokeapi.co/api/v2/pokemon/${name.trim().toLowerCase()}`);
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    const types = d.types.sort((a,b)=>a.slot-b.slot).map(t=>t.type.name).filter(t=>TYPES.includes(t));
+    team[i] = { name: d.name, sprite: d.sprites.front_default, types };
+    renderTeamSlots();
+    renderCoverage();
+  } catch {}
+}
+
+function slotInput(input, i) {
+  const val = input.value.trim().toLowerCase();
+  const ac  = document.getElementById(`slot-ac-${i}`);
+  if (val.length < 2) { ac.innerHTML=''; ac.classList.remove('open'); return; }
+  const m = [...pokeNames.filter(n=>n.startsWith(val)), ...pokeNames.filter(n=>!n.startsWith(val)&&n.includes(val))].slice(0,7);
+  ac.innerHTML = m.map(n=>`<div class="slot-ac-item" onclick="slotPick(${i},'${n}')">${cap(n)}</div>`).join('');
+  ac.classList.toggle('open', m.length > 0);
+}
+function slotKey(e, input, i) {
+  if (e.key==='Enter' && input.value.trim()) { closeSlotAC(i); addTeamMember(i, input.value.trim()); }
+  else if (e.key==='Escape') closeSlotAC(i);
+}
+function slotPick(i, name) { closeSlotAC(i); addTeamMember(i, name); }
+function closeSlotAC(i) { document.getElementById(`slot-ac-${i}`)?.classList.remove('open'); }
+document.addEventListener('click', e => {
+  if (!e.target.closest('.slot-input-wrap'))
+    document.querySelectorAll('.slot-ac').forEach(el=>el.classList.remove('open'));
+});
+
+// ── Coverage heatmap ──
+function renderCoverage() {
+  const wrap = document.getElementById('coverage-wrap');
+  if (!team.some(Boolean)) {
+    wrap.innerHTML = `<div class="cov-empty">Add Pokémon above to see team defensive coverage</div>`;
+    renderSidebar(null, null);
+    return;
+  }
+
+  const defs = team.map(computeMemberDef);
+  const tally = buildTally(defs);
+
+  const sorted = [...TYPES].sort((a, b) => {
+    const score = t => t.w4*2.5 + t.w2 - t.im*2.5 - t.r4*1.8 - t.r2;
+    return score(tally[b]) - score(tally[a]);
+  });
+
+  const memberHdrs = team.map((m, i) =>
+    m ? `<th title="${cap(m.name)}">
+          <div class="member-hdr-cell">
+            ${m.sprite ? `<img class="member-spr" src="${m.sprite}" alt="">` : ''}
+            <span class="member-hdr-name">${cap(m.name)}</span>
+          </div>
+        </th>`
+      : `<th class="slot-empty-hdr">—</th>`
+  ).join('');
+
+  let rows = '';
+  for (const atk of sorted) {
+    const t = tally[atk];
+    const weakTotal = t.w4 + t.w2;
+    const isDanger  = weakTotal >= 3 || t.w4 >= 2;
+    const isCaution = weakTotal === 2 && !isDanger;
+    const rowCls    = isDanger ? 'danger' : isCaution ? 'caution' : '';
+    const alertIcon = isDanger
+      ? `<span class="cov-alert-icon" style="color:#ff4040">⚠</span>`
+      : isCaution
+      ? `<span class="cov-alert-icon" style="color:#ffaa00">!</span>`
+      : `<span class="cov-alert-icon"></span>`;
+
+    const cells = team.map((m, i) => {
+      if (!m) return `<td class="cov-cell"></td>`;
+      const mv = defs[i][atk] ?? 1;
+      const [cls, txt] = mvToStyle(mv);
+      return `<td class="cov-cell"><span class="cov-badge ${cls}">${txt}</span></td>`;
+    }).join('');
+
+    const sumParts = [];
+    if (t.w4) sumParts.push(`<span class="cov-badge cov-weak4">${t.w4}×4</span>`);
+    if (t.w2) sumParts.push(`<span class="cov-badge cov-weak">${t.w2}×2</span>`);
+    if (t.im) sumParts.push(`<span class="cov-badge cov-immune">${t.im} imm</span>`);
+    if (t.r4) sumParts.push(`<span class="cov-badge cov-qresist">${t.r4}×¼</span>`);
+    if (t.r2) sumParts.push(`<span class="cov-badge cov-resist">${t.r2}×½</span>`);
+
+    rows += `<tr class="cov-row ${rowCls}">
+      <td class="cov-type-cell"><div class="cov-type-inner">
+        ${alertIcon}
+        <img src="${imgSrc(atk)}" alt="${atk}">
+        <span class="cov-type-lbl" style="color:${TC[atk]}">${cap(atk)}</span>
+      </div></td>
+      ${cells}
+      <td class="cov-sum-cell"><div class="sum-line">${sumParts.join('')}</div></td>
+    </tr>`;
+  }
+
+  wrap.innerHTML = `
+    <div class="cov-legend">
+      <span class="cov-legend-item"><span class="cov-badge cov-weak4">4×</span> 4× weak</span>
+      <span class="cov-legend-item"><span class="cov-badge cov-weak">2×</span> 2× weak</span>
+      <span class="cov-legend-item"><span class="cov-badge cov-resist">½×</span> resists</span>
+      <span class="cov-legend-item"><span class="cov-badge cov-qresist">¼×</span> quad</span>
+      <span class="cov-legend-item"><span class="cov-badge cov-immune">0×</span> immune</span>
+      <span style="margin-left:auto;font-size:.68rem;color:#ff4040">⚠ 3+ weak &nbsp;</span>
+      <span style="font-size:.68rem;color:#ffaa00">! 2 weak</span>
+    </div>
+    <table class="coverage-table">
+      <thead>
+        <tr>
+          <th class="type-hdr">Atk Type</th>
+          ${memberHdrs}
+          <th class="sum-hdr">Summary</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  renderSidebar(tally, defs);
+}
+
+function buildTally(defs) {
+  const tally = {};
+  for (const atk of TYPES) {
+    tally[atk] = { w4:0, w2:0, n:0, r2:0, r4:0, im:0 };
+    for (let i = 0; i < 6; i++) {
+      if (!team[i]) continue;
+      const m = defs[i][atk] ?? 1;
+      if      (m===4)    tally[atk].w4++;
+      else if (m===2)    tally[atk].w2++;
+      else if (m===0.5)  tally[atk].r2++;
+      else if (m===0.25) tally[atk].r4++;
+      else if (m===0)    tally[atk].im++;
+      else               tally[atk].n++;
+    }
+  }
+  return tally;
+}
+
+function mvToStyle(mv) {
+  if (mv===0)    return ['cov-immune',  '0×'];
+  if (mv===0.25) return ['cov-qresist', '¼×'];
+  if (mv===0.5)  return ['cov-resist',  '½×'];
+  if (mv===2)    return ['cov-weak',    '2×'];
+  if (mv===4)    return ['cov-weak4',   '4×'];
+  return ['cov-neutral', '·'];
+}
+
+// ── Sidebar ──
+function renderSidebar(tally, defs) {
+  renderHoleAnalysis(tally, defs);
+  renderRecPanel(tally);
+}
+
+function renderHoleAnalysis(tally, defs) {
+  const scroll = document.getElementById('hole-panel-scroll');
+  const hdr    = document.querySelector('#hole-panel .panel-hdr');
+
+  if (!tally || !team.some(Boolean)) {
+    if (hdr) hdr.innerHTML = `<span>Defensive Holes</span>`;
+    scroll.innerHTML = `<div class="panel-empty">Add Pokémon to analyze</div>`;
+    return;
+  }
+
+  const holes = TYPES.filter(atk => tally[atk].w4 + tally[atk].w2 >= 2)
+    .sort((a,b) => {
+      const s = t => t.w4*2 + t.w2;
+      return s(tally[b]) - s(tally[a]);
+    });
+
+  if (hdr) {
+    if (!holes.length) {
+      hdr.innerHTML = `<span>Defensive Holes</span><span class="panel-hdr-badge" style="background:rgba(50,190,100,.15);color:#6dffa0">None ✓</span>`;
+    } else {
+      hdr.innerHTML = `<span>Defensive Holes</span><span class="panel-hdr-badge" style="background:rgba(200,0,0,.2);color:#ff8888">${holes.length}</span>`;
+    }
+  }
+
+  if (!holes.length) {
+    scroll.innerHTML = `<div class="panel-empty" style="color:#6dffa0;opacity:.8">✓ No major defensive holes — solid coverage!</div>`;
+    return;
+  }
+
+  scroll.innerHTML = holes.map(atk => {
+    const t = tally[atk];
+    const weakTotal = t.w4 + t.w2;
+    const isDanger  = weakTotal >= 3 || t.w4 >= 2;
+    const cardCls   = isDanger ? 'danger' : 'caution';
+    const badgeCls  = isDanger ? 'hole-danger-badge' : 'hole-caution-badge';
+    const badgeTxt  = `${weakTotal} weak ${isDanger ? '⚠' : '!'}`;
+
+    const weakMons = team
+      .map((m, i) => m ? { name: m.name, sprite: m.sprite, mult: defs[i]?.[atk] ?? 1 } : null)
+      .filter(w => w && w.mult > 1)
+      .sort((a,b) => b.mult - a.mult);
+
+    const monItems = weakMons.map(w => {
+      const [cls] = mvToStyle(w.mult);
+      return `<div class="hole-mon">
+        ${w.sprite ? `<img class="hole-mon-spr" src="${w.sprite}" alt="">` : ''}
+        <span class="hole-mon-name">${cap(w.name)}</span>
+        <span class="cov-badge ${cls} hole-mon-mult">${w.mult}×</span>
+      </div>`;
+    }).join('');
+
+    return `<div class="hole-card ${cardCls}">
+      <div class="hole-card-hdr">
+        <img src="${imgSrc(atk)}" alt="${atk}">
+        <span class="hole-type-name" style="color:${TC[atk]}">${cap(atk)}</span>
+        <span class="hole-hdr-badge ${badgeCls}">${badgeTxt}</span>
+      </div>
+      <div class="hole-mons">${monItems}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Recommendations ──
+function renderRecPanel(tally) {
+  const scroll = document.getElementById('rec-panel-scroll');
+  const hdr    = document.querySelector('#rec-panel .panel-hdr');
+
+  if (!tally || !team.some(Boolean)) {
+    if (hdr) hdr.innerHTML = `<span>Coverage Picks</span>`;
+    scroll.innerHTML = `<div class="panel-empty">Add Pokémon to get recommendations</div>`;
+    return;
+  }
+
+  const holeTypes = TYPES.filter(atk => tally[atk].w4 + tally[atk].w2 >= 2);
+
+  if (hdr) hdr.innerHTML = `<span>Coverage Picks</span>
+    <div class="reg-toggle">
+      <button class="reg-btn ${svMode?'active':''}" onclick="setRegMode(true)">Champions</button>
+      <button class="reg-btn ${!svMode?'active':''}" onclick="setRegMode(false)">SV Reg G</button>
+    </div>`;
+
+  // Always recommend — coverage picks when holes exist, synergy/usage picks when solid
+  const loadingLbl = holeTypes.length
+    ? `Best picks to fill ${holeTypes.length} hole${holeTypes.length>1?'s':''}`
+    : `Top picks for your team`;
+
+  scroll.innerHTML = `<div class="rec-controls">
+    <span class="rec-controls-lbl">${loadingLbl}</span>
+  </div>
+  <div class="rec-loading">⟳ ${holeTypes.length ? 'Finding coverage picks' : 'Finding top picks'}…</div>`;
+
+  fetchAndShowRecs(holeTypes);
+}
+
+function setRegMode(sv) {
+  svMode = sv;
+  renderCoverage();
+}
+
+// Returns true if pokemonData (from /api/v2/pokemon/) has no further evolutions.
+// Uses species → evolution_chain with per-chain caching so the same chain isn't fetched twice.
+async function isFullyEvolved(pokemonData) {
+  try {
+    const species   = await fetch(pokemonData.species.url).then(r=>r.json());
+    const chainUrl  = species.evolution_chain.url;
+    if (!evoChainCache[chainUrl]) {
+      evoChainCache[chainUrl] = await fetch(chainUrl).then(r=>r.json());
+    }
+    const chain = evoChainCache[chainUrl];
+    // Walk tree; return true if this species is a leaf (evolves_to is empty)
+    function walk(node) {
+      if (node.species.name === species.name) return node.evolves_to.length === 0;
+      for (const child of node.evolves_to) {
+        const r = walk(child);
+        if (r !== undefined) return r;
+      }
+    }
+    return walk(chain.chain) ?? true; // default include if not found
+  } catch { return true; } // on network error, don't silently drop the candidate
+}
+
+// Fetches all three SV dexes — Paldea, Kitakami (DLC1), Blueberry/Indigo Disk (DLC2)
+// Together these form the Regulation G legal pool used in SV VGC Champions Series
+async function fetchSVRegDex() {
+  if (svRegCache) return svRegCache;
+  try {
+    const [paldea, kitakami, blueberry] = await Promise.all([
+      fetch('https://pokeapi.co/api/v2/pokedex/paldea').then(r=>r.json()),
+      fetch('https://pokeapi.co/api/v2/pokedex/kitakami').then(r=>r.json()).catch(()=>({pokemon_entries:[]})),
+      fetch('https://pokeapi.co/api/v2/pokedex/blueberry').then(r=>r.json()).catch(()=>({pokemon_entries:[]}))
+    ]);
+    svRegCache = new Set([
+      ...paldea.pokemon_entries.map(e=>e.pokemon_species.name),
+      ...kitakami.pokemon_entries.map(e=>e.pokemon_species.name),
+      ...blueberry.pokemon_entries.map(e=>e.pokemon_species.name)
+    ]);
+  } catch { svRegCache = new Set(); }
+  return svRegCache;
+}
+
+// Convert Pokémon name to showdowntier.com URL key (strip all hyphens, lowercase)
+// e.g. "rotom-wash" → "rotomwash", "kommo-o" → "kommoo", "flutter-mane" → "fluttermane"
+function toSTname(name) {
+  return name.toLowerCase().replace(/-/g, '');
+}
+
+// Fetch "Frequent Partners" co-occurrence data from showdowntier.com for a given Pokémon.
+// formatCode: 'dma' = Champions (Reg M-A), 'df' = SV Reg F/G
+// Returns a Map: { partnerSTname → appearPct (number) }
+// Gracefully returns empty Map on CORS block or any network failure.
+async function fetchPartnerData(pokemonName, formatCode) {
+  const stName = toSTname(pokemonName);
+  const key = `${stName}:${formatCode}`;
+  if (partnerCache[key] !== undefined) return partnerCache[key];
+
+  const partners = new Map();
+  try {
+    const url = `https://showdowntier.com/formats/${formatCode}/pokemon/${stName}.html`;
+    const html = await fetch(url, { mode: 'cors' }).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    });
+    // Find "Frequent Partners" section; parse only the next ~3000 chars to avoid false matches
+    const idx = html.indexOf('Frequent Partners');
+    if (idx !== -1) {
+      const section = html.slice(idx, idx + 4000);
+      const re = /\/pokemon\/([a-z0-9]+)\.png\)[\s\S]*?([\d.]+)%\s*appear/g;
+      let m;
+      while ((m = re.exec(section)) !== null) {
+        partners.set(m[1], parseFloat(m[2]));
+      }
+    }
+  } catch { /* CORS or network error — return empty map, scoring degrades gracefully */ }
+
+  partnerCache[key] = partners;
+  return partners;
+}
+
+async function fetchAndShowRecs(holeTypes) {
+  const scroll = document.getElementById('rec-panel-scroll');
+  const noHolesMode = holeTypes.length === 0;
+  try {
+    // ── 1. Pre-fetch partner data for all team members ──
+    const formatCode = svMode ? 'dma' : 'df';
+    const activeMems = team.filter(Boolean);
+    const memberPartners = await Promise.all(
+      activeMems.map(m => fetchPartnerData(m.name, formatCode))
+    );
+
+    const usageMap = svMode ? VGC_USAGE : SV_VGC_USAGE;
+    const onTeam   = new Set(activeMems.map(m => m.name));
+    const svReg    = svMode ? null : await fetchSVRegDex();
+
+    // ── 2. Build team vulnerability profile ──
+    // typeVulnWeight[atk] = NET urgency of needing coverage vs this attacking type.
+    // Weaknesses ADD to the score; resists/immunities from OTHER team members SUBTRACT —
+    // so if Garchomp is 4× weak to Ice but Blastoise resists Ice, Ice weight = 3 − 1 = 2.
+    // If Garchomp is immune to Electric (covering Blastoise's weakness), Electric weight = 1 − 3 = −2 → not needed.
+    // Only positive net scores make it into the map (actual unresolved team needs).
+    const typeVulnWeight = {};
+    for (const atk of TYPES) {
+      let w = 0;
+      for (const m of activeMems) {
+        const mult = computeMemberDef(m)[atk] ?? 1;
+        if      (mult === 4)    w += 3;
+        else if (mult === 2)    w += 1;
+        else if (mult === 0.5)  w -= 1;
+        else if (mult === 0.25) w -= 2;
+        else if (mult === 0)    w -= 3;
+      }
+      if (w > 0) typeVulnWeight[atk] = w; // only real unresolved needs
+    }
+
+    // ── 3. Build candidate pool ──
+    let candidates = [];
+
+    if (noHolesMode) {
+      // No declared holes — use VGC top picks; typeVulnWeight re-ranks them below
+      candidates = Object.entries(usageMap)
+        .filter(([n]) => {
+          if (onTeam.has(n)) return false;
+          const base = n.split('-')[0];
+          if (LEGENDARIES.has(n) || LEGENDARIES.has(base)) return false;
+          if (!svMode && svReg?.size && !svReg.has(n) && !svReg.has(base)) return false;
+          return true;
+        })
+        .sort(([,a],[,b]) => b - a)
+        .slice(0, 18)
+        .map(([name]) => ({ name, url: `https://pokeapi.co/api/v2/pokemon/${name}` }));
+    } else {
+      // Has declared holes — type-based lookup
+      const typeScore = {};
+      for (const atk of holeTypes) {
+        for (const r of [...(NVE[atk]||[]), ...(IMM[atk]||[])]) {
+          typeScore[r] = (typeScore[r]||0) + 1;
+        }
+      }
+      const topTypes = Object.entries(typeScore).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t])=>t);
+      const seen = new Set(onTeam);
+
+      for (const defType of topTypes) {
+        if (candidates.length >= 24) break;
+        const typeData = await fetch(`https://pokeapi.co/api/v2/type/${defType}`).then(r=>r.json());
+        for (const entry of typeData.pokemon) {
+          const pName = entry.pokemon.name;
+          if (pName.includes('-mega')||pName.includes('-gmax')||pName.includes('-totem')||pName.includes('-primal')||pName.includes('-ultra')) continue;
+          const base = pName.split('-')[0];
+          if (seen.has(pName)||seen.has(base)) continue;
+          if (LEGENDARIES.has(base)||LEGENDARIES.has(pName)) continue;
+          if (!svMode && svReg?.size && !svReg.has(pName) && !svReg.has(base)) continue;
+          seen.add(pName);
+          candidates.push({ name: pName, url: entry.pokemon.url });
+          if (candidates.length >= 24) break;
+        }
+      }
+    }
+
+    // ── 4. Fetch details, filter unevolved, compute scores ──
+    const results = [];
+    for (const c of candidates) {
+      try {
+        const d = await fetch(c.url).then(r=>r.json());
+        const fullyEvolved = await isFullyEvolved(d);
+        if (!fullyEvolved) continue;
+
+        const types  = d.types.sort((a,b)=>a.slot-b.slot).map(t=>t.type.name).filter(t=>TYPES.includes(t));
+        const defMap = computeMemberDef({ types });
+
+        // Coverage score + display list — differs by mode
+        let coverScore = 0;
+        let coversTypes = [];
+
+        if (noHolesMode) {
+          // Score by how well this candidate covers the team's vulnerability profile.
+          // A mon resisting a 4× weakness (weight 3) scores 42; resisting a 2× weakness (weight 1) scores 14.
+          // This makes Kingambit rank #1 when Garchomp is on team: covers Ice(4×)+Fairy(2×)+Dragon(2×) = 42+14+14=70
+          for (const [atk, weight] of Object.entries(typeVulnWeight)) {
+            if ((defMap[atk] ?? 1) < 1) {
+              coverScore += weight * 14;
+              coversTypes.push(atk);
+            }
+          }
+          // No minimum — usage+pairing alone can still surface a mon with no coverage help
+        } else {
+          coversTypes = holeTypes.filter(h => (defMap[h]??1) < 1);
+          if (!coversTypes.length) continue; // must cover at least one declared hole
+          coverScore = coversTypes.length * 40;
+        }
+
+        const usage = usageMap[d.name] ?? usageMap[d.name.split('-')[0]] ?? 0;
+
+        const candidateST = toSTname(d.name);
+        let rawPairing = 0;
+        const synergyWith = [];
+        activeMems.forEach((m, idx) => {
+          const pct = memberPartners[idx].get(candidateST) ?? 0;
+          rawPairing += pct;
+          if (pct >= 5) synergyWith.push({ name: m.name, pct });
+        });
+        const pairingScore = Math.min(rawPairing * 1.5, 100);
+
+        results.push({ name: d.name, sprite: d.sprites.front_default, types, coversTypes, coverScore, usage, pairingScore, synergyWith });
+      } catch {}
+    }
+
+    // ── 5. Sort: coverScore  +  usage  +  pairing ──
+    results.sort((a,b) => {
+      const sA = a.coverScore + a.usage + a.pairingScore;
+      const sB = b.coverScore + b.usage + b.pairingScore;
+      return sB - sA;
+    });
+    const top = results.slice(0, 5);
+
+    if (!top.length) {
+      scroll.innerHTML = `<div class="rec-controls"><span class="rec-controls-lbl">Top picks</span></div>
+        <div class="panel-empty">${svMode?'No picks found.':'No SV Reg G picks found — try Champions.'}</div>`;
+      return;
+    }
+
+    // ── 6. Render cards ──
+    function usageTier(score) {
+      if (score >= 85) return { label:'S-tier', color:'#ff6b6b' };
+      if (score >= 70) return { label:'A-tier', color:'#ffa94d' };
+      if (score >= 45) return { label:'B-tier', color:'#a9e34b' };
+      if (score >= 20) return { label:'C-tier', color:'#74c0fc' };
+      return null;
+    }
+
+    const cards = top.map(r => {
+      const typeChips  = r.types.map(t=>`<span class="slot-chip" style="background:${TC[t]}cc">${cap(t)}</span>`).join('');
+      const tier       = usageTier(r.usage);
+      const tierBadge  = tier ? `<span class="rec-tier-badge" style="color:${tier.color};border-color:${tier.color}33">${tier.label}</span>` : '';
+      const emptySlot  = team.findIndex(m=>!m);
+
+      // Sort coversTypes by descending vulnerability weight so most urgent are shown first
+      const sortedCovers = [...r.coversTypes].sort((a,b) => (typeVulnWeight[b]||0) - (typeVulnWeight[a]||0));
+      const coversHtml = sortedCovers.length
+        ? `<div class="rec-covers">Covers: ${sortedCovers.map(t=>`<strong style="color:${TC[t]}">${cap(t)}</strong>`).join(', ')}</div>`
+        : '';
+
+      const synergyHtml = r.synergyWith.length
+        ? `<div class="rec-synergy"><span class="syn-label">Often with: </span>${
+            r.synergyWith.map(s=>`<span class="syn-pair">${cap(s.name)} ${s.pct.toFixed(1)}%</span>`).join(' · ')
+          }</div>`
+        : '';
+
+      return `<div class="rec-card">
+        <img class="rec-spr" src="${r.sprite||''}" alt="${r.name}">
+        <div class="rec-info">
+          <div class="rec-name-row">
+            <span class="rec-name">${cap(r.name)}</span>${tierBadge}
+          </div>
+          <div class="rec-types">${typeChips}</div>
+          ${coversHtml}
+          ${synergyHtml}
+        </div>
+        ${emptySlot>=0?`<button class="rec-add-btn" onclick="addTeamMember(${emptySlot},'${r.name}')">+ Add</button>`:''}
+      </div>`;
+    }).join('');
+
+    const panelLbl = noHolesMode
+      ? `Top picks for your team`
+      : `Best picks to fill ${holeTypes.length} hole${holeTypes.length>1?'s':''}`;
+    scroll.innerHTML = `<div class="rec-controls"><span class="rec-controls-lbl">${panelLbl}</span></div><div class="rec-list">${cards}</div>`;
+
+  } catch {
+    scroll.innerHTML = `<div class="panel-empty">Could not load recommendations.</div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+buildGrid();
+update();
+fetchPokeNames();
+</script>
+</body>
+</html>
