@@ -832,7 +832,7 @@ function renderDefPanel() {
   body.innerHTML = sections.join('');
   const wrapper = document.getElementById('def-panel-wrapper');
   wrapper.style.display = 'block';
-  wrapper.classList.add('open');  // auto-open when new type selected
+  // stays collapsed by default — user taps Details to expand
 }
 
 function toggleDefPanel() {
